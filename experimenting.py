@@ -1,60 +1,84 @@
-import numpy as np
-import torch
-from PIL import Image
-from diffusers import DiffusionPipeline
-from diffusers.utils import load_image
+import cv2
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QSlider, QPushButton, QFileDialog
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QImage, QPixmap
 
-def set_padding(**patch):
-    cls = torch.nn.Conv2d
-    init = cls.__init__
-    def __init__(self, *args, **kwargs):
-        return init(self, *args, **kwargs, **patch)
-    cls.__init__ = __init__
-
-set_padding(padding_mode='circular')
-
-# Original DDIM version (higher quality)
-pipe = DiffusionPipeline.from_pretrained(
-    "prs-eth/marigold-v1-0",
-    custom_pipeline="marigold_depth_estimation"
-    torch_dtype=torch.float16,                # (optional) Run with half-precision (16-bit float).
-    variant="fp16",                           # (optional) Use with `torch_dtype=torch.float16`, to directly load fp16 checkpoint
-)
-pipe.enable_model_cpu_offload()
-
-# Replace 'path_to_local_file' with the actual path to your image file
-img_path = "D:\\Projects\\SDtoUnreal\\front view brick wall, crumbly_1.png"
-# Load the image
-image = Image.open(img_path)
-
-
-pipeline_output = pipe(
-    image,                    # Input image.
-    # ----- recommended setting for DDIM version -----
-    denoising_steps=10,     # (optional) Number of denoising steps of each inference pass. Default: 10.
-    ensemble_size=10,       # (optional) Number of inference passes in the ensemble. Default: 10.
-    # ------------------------------------------------
-    
-    # ----- recommended setting for LCM version ------
-    # denoising_steps=4,
-    # ensemble_size=5,
-    # -------------------------------------------------
-    
-    processing_res=768,     # (optional) Maximum resolution of processing. If set to 0: will not resize at all. Defaults to 768.
-    match_input_res=True,   # (optional) Resize depth prediction to match input resolution.
-    # batch_size=0,           # (optional) Inference batch size, no bigger than `num_ensemble`. If set to 0, the script will automatically decide the proper batch size. Defaults to 0.
-    seed=2024,              # (optional) Random seed can be set to ensure additional reproducibility. Default: None (unseeded). Note: forcing --batch_size 1 helps to increase reproducibility. To ensure full reproducibility, deterministic mode needs to be used.
-    color_map="Spectral"   # (optional) Colormap used to colorize the depth map. Defaults to "Spectral". Set to `None` to skip colormap generation.
-    # show_progress_bar=True, # (optional) If true, will show progress bars of the inference progress.
-)
-
-depth: np.ndarray = pipeline_output.depth_np                    # Predicted depth map
-depth_colored: Image.Image = pipeline_output.depth_colored      # Colorized prediction
-
-# Save as uint16 PNG
-depth_uint16 = (depth * 65535.0).astype(np.uint16)
-Image.fromarray(depth_uint16).save("./depth_map.png", mode="I;16")
-
-# Save colorized depth map
-depth_colored.save("./depth_colored.png")
-
+class ImageProcessor(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.image = None
+        self.clahe = cv2.createCLAHE(clipLimit=0.1, tileGridSize=(8, 8))  # Decreased clipLimit for reduced contrast
+        
+        self.setup_ui()
+        
+    def setup_ui(self):
+        self.setWindowTitle("CLAHE Image Processor")
+        
+        self.image_label = QLabel(self)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        
+        self.upload_button = QPushButton("Upload Image")
+        self.upload_button.clicked.connect(self.upload_image)
+        
+        self.clip_limit_slider = QSlider(Qt.Horizontal)
+        self.clip_limit_slider.setMinimum(1)
+        self.clip_limit_slider.setMaximum(100)
+        self.clip_limit_slider.setValue(10)  # Decreased initial value for clipLimit
+        self.clip_limit_slider.valueChanged.connect(self.update_image)
+        
+        self.tile_grid_size_slider = QSlider(Qt.Horizontal)
+        self.tile_grid_size_slider.setMinimum(2)
+        self.tile_grid_size_slider.setMaximum(20)
+        self.tile_grid_size_slider.setValue(8)
+        self.tile_grid_size_slider.valueChanged.connect(self.update_image)
+        
+        layout = QVBoxLayout()
+        layout.addWidget(self.upload_button)
+        layout.addWidget(self.image_label)
+        layout.addWidget(QLabel("Clip Limit"))
+        layout.addWidget(self.clip_limit_slider)
+        layout.addWidget(QLabel("Tile Grid Size"))
+        layout.addWidget(self.tile_grid_size_slider)
+        
+        self.setLayout(layout)
+        
+    def upload_image(self):
+        file_dialog = QFileDialog(self)
+        file_dialog.setNameFilter("Images (*.png *.jpg *.bmp)")
+        file_dialog.setViewMode(QFileDialog.Detail)
+        if file_dialog.exec_():
+            file_paths = file_dialog.selectedFiles()
+            if file_paths:
+                image_path = file_paths[0]
+                self.image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+                if self.image is not None:
+                    self.update_image()
+                else:
+                    print("Failed to load the image.")
+        
+    def update_image(self):
+        if self.image is None:
+            return
+        
+        clip_limit = self.clip_limit_slider.value() / 10.0  # Scale clipLimit to be between 0 and 1
+        tile_grid_size = (self.tile_grid_size_slider.value(), self.tile_grid_size_slider.value())
+        
+        self.clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+        equalized_image = self.clahe.apply(self.image)
+        if equalized_image is None:
+            print("CLAHE operation failed.")
+            return
+        
+        height, width = equalized_image.shape
+        bytes_per_line = width
+        
+        q_image = QImage(equalized_image.data, width, height, bytes_per_line, QImage.Format_Grayscale8)
+        pixmap = QPixmap.fromImage(q_image)
+        self.image_label.setPixmap(pixmap)
+        
+if __name__ == "__main__":
+    import sys
+    app = QApplication(sys.argv)
+    window = ImageProcessor()
+    window.show()
+    sys.exit(app.exec())

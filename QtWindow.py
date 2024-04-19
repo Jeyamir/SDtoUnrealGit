@@ -3,10 +3,12 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget,  QPushButto
 from PySide6.QtGui import QPixmap, QFont
 from PySide6.QtCore import QSettings, Qt, Slot
 from random import randint
-from generate import SDXLPipeline
-from controlnet_ui import ControlNetWindow
-from normalheightgenerate import ImageProcessor
+from SDXL import SDXLPipeline
+from QtControlNet import ControlNetWindow
+from QtDeepBump import ImageProcessor
 from utils_Qt import addFormRow
+from QtMarigold import MarigoldWindow
+from convertimagerange import PixelRangeConversionApp
 
 class MainWindow(QMainWindow):
     def __init__(self, model = None):
@@ -23,11 +25,17 @@ class MainWindow(QMainWindow):
         self.secondMenu = StableDiffusionMenu()
         self.thirdMenu = ControlNetWindow()
         self.fourthMenu = ImageProcessor()
+        self.fifthMenu = MarigoldWindow()
+        self.sixthMenu = PixelRangeConversionApp()
+
         # Add tab names
         self.tabWidget.addTab(self.firstMenu, "Setup")
-        self.tabWidget.addTab(self.secondMenu, "Texture Generation ")
+        self.tabWidget.addTab(self.secondMenu, "SDXL")
         self.tabWidget.addTab(self.thirdMenu, "ControlNet")
-        self.tabWidget.addTab(self.fourthMenu, "Normal and Height Map Generator")
+        self.tabWidget.addTab(self.fourthMenu, "DeepBump")
+        self.tabWidget.addTab(self.fifthMenu, "Marigold")
+        self.tabWidget.addTab(self.sixthMenu, "Pixel Range Conversion")
+
         
 
 class SetupMenu(QWidget):
