@@ -3,8 +3,8 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget,  QPushButto
 from PySide6.QtGui import QPixmap, QFont
 from PySide6.QtCore import QSettings, Qt, Slot
 from random import randint
-from SDXL import SDXLPipeline
-from QtControlNet import ControlNetWindow
+from PipelineSDXL import SDXLPipeline
+from QtAdapters import AdapterWindow
 from QtDeepBump import ImageProcessor
 from utils_Qt import addFormRow
 from QtMarigold import MarigoldWindow
@@ -23,7 +23,7 @@ class MainWindow(QMainWindow):
         # Create instances of the menus
         self.firstMenu = SetupMenu()
         self.secondMenu = StableDiffusionMenu()
-        self.thirdMenu = ControlNetWindow()
+        self.thirdMenu = AdapterWindow()
         self.fourthMenu = ImageProcessor()
         self.fifthMenu = MarigoldWindow()
         self.sixthMenu = PixelRangeConversionApp()
@@ -31,7 +31,7 @@ class MainWindow(QMainWindow):
         # Add tab names
         self.tabWidget.addTab(self.firstMenu, "Setup")
         self.tabWidget.addTab(self.secondMenu, "SDXL")
-        self.tabWidget.addTab(self.thirdMenu, "ControlNet")
+        self.tabWidget.addTab(self.thirdMenu, "Adapters")
         self.tabWidget.addTab(self.fourthMenu, "DeepBump")
         self.tabWidget.addTab(self.fifthMenu, "Marigold")
         self.tabWidget.addTab(self.sixthMenu, "Pixel Range Conversion")
@@ -142,19 +142,15 @@ class StableDiffusionMenu(QWidget):
         self.guidanceScaleSpinBox.valueChanged.connect(self.updateGuidanceScale)
 
         # Random Seed Spin Box
-        self.seedLayout = QHBoxLayout()
         self.seedSpinBox = QSpinBox()
         self.seedSpinBox.setMinimum(1)  # Set minimum value
         self.seedSpinBox.setMaximum(999999)
-        self.seedSpinBoxLabel = QLabel("Custom Seed")
         self.seedSpinBox.setValue(0)  
         self.seedSpinBox.setEnabled(False)
         self.seedSpinBox.valueChanged.connect(self.updateSeed)
         self.seedCheckBox = QCheckBox()
         self.seedCheckBox.stateChanged.connect(self.seedSpinBox.setEnabled)
         self.seedCheckBox.stateChanged.connect(self.randomizeSeed)
-        self.seedLayout.addWidget(self.seedSpinBox)
-        self.seedLayout.addWidget(self.seedCheckBox)
 
 
         # Create QLineEdit and QLabel for Prompt1
@@ -176,6 +172,7 @@ class StableDiffusionMenu(QWidget):
         self.heightSlider.valueChanged.connect(self.updateHeight)
         # Create the height Spin Box
         self.heightSpinBox = QSpinBox()
+        self.heightSpinBox.setMinimumWidth(100)
         self.heightSpinBox.setMinimum(64)
         self.heightSpinBox.setMaximum(2048)
         self.heightSpinBox.setValue(1024)  
@@ -196,6 +193,7 @@ class StableDiffusionMenu(QWidget):
         self.widthSlider.valueChanged.connect(self.updateWidth)
         # Create the width Spin Box
         self.widthSpinBox = QSpinBox()
+        self.widthSpinBox.setMinimumWidth(100)
         self.widthSpinBox.setMinimum(64)
         self.widthSpinBox.setMaximum(2048)
         self.widthSpinBox.setValue(1024)  
@@ -228,6 +226,11 @@ class StableDiffusionMenu(QWidget):
         self.imageLabels = [QLabel(self) for _ in range(4)]
 
         # FORMATTING----------------------------------------------------------------------------------------------------------------
+        # self.layout.addWidget(self.negativePrompt1LineEdit)
+        addFormRow(self.layout,"Prompt", self.prompt1LineEdit)
+        addFormRow(self.layout,"Negative Prompt", self.negativePrompt1LineEdit)
+
+        
         # scheduler
         # layout.addWidget(self.schedulerLabel)
         # self.layout.addWidget(self.schedulerComboBox)
@@ -259,10 +262,6 @@ class StableDiffusionMenu(QWidget):
         # prompts
         # layout.addWidget(self.prompt1Label)
         # self.layout.addWidget(self.prompt1LineEdit)
-
-        # self.layout.addWidget(self.negativePrompt1LineEdit)
-        addFormRow(self.layout,"Prompt", self.prompt1LineEdit)
-        addFormRow(self.layout,"Negative Prompt", self.negativePrompt1LineEdit)
 
 
         # height slider

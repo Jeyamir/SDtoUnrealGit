@@ -1,32 +1,32 @@
 import cv2
 import numpy as np
 
-def local_contrast_normalization(image, block_size=21, clip_limit=10):
-    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to each block
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(block_size, block_size))
-    equalized_image = clahe.apply(image)
+def circular_average_filter(image_path, radius):
+    # Load the image in grayscale
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     
-    # Convert the equalized image to float32 for further processing
-    equalized_image_float = np.float32(equalized_image) / 255.0
+    # Create a circular kernel with the specified radius
+    kernel_size = 2 * radius + 1
+    kernel = np.zeros((kernel_size, kernel_size), dtype=np.uint8)
+    y, x = np.ogrid[-radius:radius+1, -radius:radius+1]
+    mask = x**2 + y**2 <= radius**2
+    kernel[mask] = 1
     
-    # Calculate the local mean and standard deviation using a square window
-    local_mean = cv2.boxFilter(equalized_image_float, -1, (block_size, block_size))
-    local_mean_squared = cv2.boxFilter(equalized_image_float**2, -1, (block_size, block_size))
-    local_std_dev = np.sqrt(local_mean_squared - local_mean**2)
+    # Normalize the kernel so that the sum of all elements equals 1
+    kernel = kernel / np.sum(kernel)
     
-    # Normalize each pixel based on local mean and standard deviation
-    normalized_image = (equalized_image_float - local_mean) / (local_std_dev + 1e-5)
-    
-    # Clip the values to [0, 1] range and convert back to uint8
-    normalized_image = np.uint8(np.clip(normalized_image * 255.0, 0, 255))
-    
-    return normalized_image
+    # Apply the kernel to the image using filter2D
+    averaged_image = cv2.filter2D(img, -1, kernel)
 
-# Load grayscale image
-image = cv2.imread("D:\\Projects\\SDtoUnreal\\depth_map.png", cv2.IMREAD_GRAYSCALE)
+    return averaged_image
 
-# Apply local contrast normalization
-normalized_image = local_contrast_normalization(image)
+# Usage example
+image_path = "D:\\Projects\\SDtoUnreal\\normalized_image.jpg" # Replace with the actual path to your image
+radius = 5  # Radius for averaging
+averaged_image = circular_average_filter(image_path, radius)
 
-# Save the normalized image
-cv2.imwrite('normalized_image.jpg', normalized_image)
+# Show and save the result
+cv2.imshow('Averaged Image', averaged_image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+cv2.imwrite('averaged_output.jpg', averaged_image)

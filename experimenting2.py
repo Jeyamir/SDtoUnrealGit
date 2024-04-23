@@ -1,32 +1,28 @@
-import cv2
-import numpy as np
+from diffusers.utils import load_image, make_image_grid
 
-def local_contrast_normalization(image, block_size=21, clip_limit=2.0):
-    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to each block
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(block_size, block_size))
-    equalized_image = clahe.apply(image)
-    
-    # Convert the equalized image to float32 for further processing
-    equalized_image_float = np.float32(image) / 255.0
-    
-    # Calculate the local mean and standard deviation using a square window
-    local_mean = cv2.boxFilter(equalized_image_float, -1, (block_size, block_size))
-    local_mean_squared = cv2.boxFilter(equalized_image_float**2, -1, (block_size, block_size))
-    local_std_dev = np.sqrt(local_mean_squared - local_mean**2)
-    
-    # Normalize each pixel based on local mean and standard deviation
-    normalized_image = (equalized_image_float - local_mean) / (local_std_dev + 1e-5)
-    
-    # Clip the values to [0, 1] range and convert back to uint8
-    normalized_image = np.uint8(np.clip(normalized_image * 255.0, 0, 255))
-    
-    return normalized_image
+image = load_image("https://huggingface.co/datasets/diffusers/docs-images/resolve/main/t2i-adapter/color_ref.png")
 
-# Load grayscale image
-image = cv2.imread("D:\\Projects\\SDtoUnreal\\depth_map.png", cv2.IMREAD_GRAYSCALE)
+from PIL import Image
 
-# Apply local contrast normalization
-normalized_image = local_contrast_normalization(image)
+color_palette = image.resize((8, 8))
+color_palette = color_palette.resize((512, 512), resample=Image.Resampling.NEAREST)
+import torch
+from diffusers import StableDiffusionAdapterPipeline, T2IAdapter
 
-# Save the normalized image
-cv2.imwrite('normalized_image.jpg', normalized_image)
+adapter = T2IAdapter.from_pretrained("TencentARC/t2iadapter_color_sd14v1", torch_dtype=torch.float16)
+pipe = StableDiffusionAdapterPipeline.from_pretrained(
+    "CompVis/stable-diffusion-v1-4",
+    # "stabilityai/stable-diffusion-xl-base-1.0"
+    adapter=adapter,
+    torch_dtype=torch.float16,
+)
+pipe.to("cuda")
+# fix the random seed, so you will get the same result as the example
+generator = torch.Generator("cuda").manual_seed(7)
+
+out_image = pipe(
+    "At night, glowing cubes in front of the beach",
+    image=color_palette,
+    generator=generator,
+).images[0]
+out_image.save("color_palette.png")

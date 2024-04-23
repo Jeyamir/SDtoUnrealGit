@@ -3,7 +3,7 @@ from diffusers import DiffusionPipeline, DDIMScheduler, KDPM2DiscreteScheduler, 
 from PySide6.QtCore import QSettings
 from compel import Compel
 
-from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
+# from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from random import randint
 import re
 # from accelerate import Accelerator
@@ -47,8 +47,8 @@ class SDXLPipeline:
     def generate_image(self, index):
         # Run both experts
         compel_proc = Compel(tokenizer=self.base.tokenizer, text_encoder=self.base.text_encoder)
-        prompt_embeds = compel_proc(self.prompt)
         self.prompt = self.prompt.strip()
+        prompt_embeds = compel_proc(self.prompt)
         generator = torch.Generator().manual_seed(self.seed + index)
         if self.refinerBool:
             image = self.base(

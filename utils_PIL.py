@@ -38,34 +38,23 @@ def scale_pixel_range(image, input_min, input_max, output_min, output_max):
     return scaled_image
 
 def convert_pixel_range(self, image, input_min, input_max, output_min, output_max):
-        # Get the dimensions of the image
-        # width, height = image.size
-        
-        # # Create a new empty image with the same size and mode
-        # converted_image = Image.new(image.mode, (width, height))
-        
-        # # Iterate over each pixel
-        # for y in range(height):
-        #     for x in range(width):
-        #         # Get the pixel value at (x, y)
-        #         pixel = image.getpixel((x, y))
-                
-        #         # Check if the pixel value is within the input range
-        #         if input_min <= pixel <= input_max:
-        #             # Perform the conversion for pixels in the input range
-        #             input_range = input_max - input_min
-        #             output_range = output_max - output_min
-        #             scaled_pixel = int((pixel - input_min) * (output_range / input_range) + output_min)
-        #             # Set the converted pixel value in the new image
-        #             converted_image.putpixel((x, y), scaled_pixel)
-        #         else:
-        #             # For pixels outside the input range, keep the original value
-        #             converted_image.putpixel((x, y), pixel)
-        
-        # return converted_image
         if self.input_min <= pixel_value <= self.input_max:
             centered_pixel_value = pixel_value / 255 - center_point
             adjusted_pixel_value = centered_pixel_value * contrast_factor + center_point
             return int(adjusted_pixel_value * 255)
         else:
             return pixel_value`
+        
+def imgToCanny():
+      ...
+      
+def imgToSketch():
+      ...
+def imgToDepth():
+    ...
+
+def imgToOpenPose():
+    ...
+
+def imgToLineart():
+    ...
