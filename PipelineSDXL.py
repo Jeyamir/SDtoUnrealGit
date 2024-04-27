@@ -1,7 +1,7 @@
 import torch
 from diffusers import DiffusionPipeline, DDIMScheduler, KDPM2DiscreteScheduler, PNDMScheduler, DPMSolverSDEScheduler, EulerAncestralDiscreteScheduler, DDPMScheduler, DEISMultistepScheduler, DPMSolverMultistepScheduler, KDPM2AncestralDiscreteScheduler, EDMEulerScheduler, HeunDiscreteScheduler, LMSDiscreteScheduler, EulerDiscreteScheduler, UniPCMultistepScheduler, DPMSolverSinglestepScheduler
 from PySide6.QtCore import QSettings
-from compel import Compel
+from compel import Compel, ReturnedEmbeddingsType
 
 # from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from random import randint
@@ -17,7 +17,6 @@ class SDXLPipeline:
         self.load_models()
         self.save_settings()
         # Pre-compile the model for faster inference if using TorchScript
-        # self.base.unet = torch.compile(self.base.unet, mode="reduce-overhead", fullgraph=True)
         self.load_default_settings()
 
     def load_models(self):
@@ -29,30 +28,38 @@ class SDXLPipeline:
             torch_dtype=torch.float16,
             use_safetensors=True,
             variant="fp16",
-        )
-        # .to("cuda")
-        self.base.enable_model_cpu_offload()
+        ).to("cuda")
+        # self.base.enable_model_cpu_offload()
+        # self.base.enable_xformers_memory_efficient_attention()
 
         self.refiner = DiffusionPipeline.from_pretrained(
             "stabilityai/stable-diffusion-xl-refiner-1.0",
             text_encoder_2=self.base.text_encoder_2,
-            vae=self.base.vae,
+            # vae=self.base.vae,
             torch_dtype=torch.float16,
             use_safetensors=True,
             variant="fp16",
-            )
-            # .to("cuda")
-        self.refiner.enable_model_cpu_offload()
+            ).to("cuda")
+        # self.refiner.enable_xformers_memory_efficient_attention()
+        # self.refiner.enable_model_cpu_offload()
+        # self.base.unet = torch.compile(self.base.unet, mode="reduce-overhead", fullgraph=True)
 
     def generate_image(self, index):
         # Run both experts
-        compel_proc = Compel(tokenizer=self.base.tokenizer, text_encoder=self.base.text_encoder)
+        compel = Compel(
+        tokenizer=[self.base.tokenizer, self.base.tokenizer_2] ,
+        text_encoder=[self.base.text_encoder, self.base.text_encoder_2],
+        returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
+        requires_pooled=[False, True]
+        )
         self.prompt = self.prompt.strip()
-        prompt_embeds = compel_proc(self.prompt)
+        conditioning_embeds, pooled_embeds = compel(self.prompt)
         generator = torch.Generator().manual_seed(self.seed + index)
         if self.refinerBool:
             image = self.base(
-                prompt_embeds=prompt_embeds,
+                # prompt_embeds=conditioning_embeds,
+                # pooled_prompt_embeds=pooled_embeds,
+                prompt = self.prompt,
                 negative_prompt = self.negative_prompt,
                 num_inference_steps=self.steps,
                 denoising_end=self.denoising_fraction,
@@ -64,7 +71,9 @@ class SDXLPipeline:
             ).images
 
             image = self.refiner(
-                prompt_embeds = prompt_embeds,
+                # prompt_embeds=conditioning_embeds,
+                # pooled_prompt_embeds=pooled_embeds,
+                prompt = self.prompt,
                 negative_prompt = self.negative_prompt,
                 num_inference_steps=self.steps,
                 denoising_start=self.denoising_fraction,
@@ -77,10 +86,11 @@ class SDXLPipeline:
 
         else:
             image = self.base(
+                # prompt_embeds=conditioning_embeds,
+                # pooled_prompt_embeds=pooled_embeds,
                 prompt = self.prompt,
                 negative_prompt = self.negative_prompt,
                 num_inference_steps=self.steps,
-                denoising_end=1.0,
                 guidance_scale = self.CFG,
                 height = self.height,
                 width = self.width,

@@ -34,13 +34,13 @@ class MarigoldWindow(QMainWindow):
         self.denoising_steps_spinbox.setGeometry(250, 450, 100, 30)
         self.denoising_steps_spinbox.setMinimum(1)
         self.denoising_steps_spinbox.setMaximum(20)
-        self.denoising_steps_spinbox.setValue(10)
+        self.denoising_steps_spinbox.setValue(4)
 
         self.ensemble_steps_spinbox = QSpinBox(self)
         self.ensemble_steps_spinbox.setGeometry(250, 500, 100, 30)
         self.ensemble_steps_spinbox.setMinimum(1)
         self.ensemble_steps_spinbox.setMaximum(20)
-        self.ensemble_steps_spinbox.setValue(10)
+        self.ensemble_steps_spinbox.setValue(5)
 
         self.process_button = QPushButton("Process", self)
         self.process_button.setGeometry(50, 550, 100, 30)
@@ -66,7 +66,7 @@ class MarigoldWindow(QMainWindow):
             # Prepare pipeline
             if not self.pipeline:
                 self.pipeline = DiffusionPipeline.from_pretrained(
-                    "prs-eth/marigold-v1-0",
+                    "prs-eth/marigold-lcm-v1-0",
                     custom_pipeline="marigold_depth_estimation",
                     torch_dtype=torch.float16,
                     variant="fp16"

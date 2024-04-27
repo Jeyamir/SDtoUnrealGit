@@ -77,10 +77,9 @@ class AdapterPipeline:
                 num_images_per_prompt=self.generatesettings["numImagesPerPrompt"]
             ).images[0]
 
-            file_path = f"./{self.generatesettings["prompt"][:30]}_1.png".replace("\n", "")
+            # file_path = f"./{self.generatesettings["prompt"][:30]}_1.png".replace("\n", "")
             sketch_image_out.save("sketch_image_out.png")
-            self.preimage.save("sketch_image.png")
-            return file_path
+            # return file_path
 
 
     def save_settings(self):

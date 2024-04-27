@@ -4,7 +4,7 @@ from PySide6.QtGui import QPixmap, QFont
 from PySide6.QtCore import QSettings, Qt, Slot
 from random import randint
 from PipelineSDXL import SDXLPipeline
-from QtAdapters import AdapterWindow
+# from QtAdapters import AdapterWindow
 from QtDeepBump import ImageProcessor
 from utils_Qt import addFormRow
 from QtMarigold import MarigoldWindow
@@ -23,7 +23,7 @@ class MainWindow(QMainWindow):
         # Create instances of the menus
         self.firstMenu = SetupMenu()
         self.secondMenu = StableDiffusionMenu()
-        self.thirdMenu = AdapterWindow()
+        # self.thirdMenu = AdapterWindow()
         self.fourthMenu = ImageProcessor()
         self.fifthMenu = MarigoldWindow()
         self.sixthMenu = PixelRangeConversionApp()
@@ -31,7 +31,7 @@ class MainWindow(QMainWindow):
         # Add tab names
         self.tabWidget.addTab(self.firstMenu, "Setup")
         self.tabWidget.addTab(self.secondMenu, "SDXL")
-        self.tabWidget.addTab(self.thirdMenu, "Adapters")
+        # self.tabWidget.addTab(self.thirdMenu, "Adapters")
         self.tabWidget.addTab(self.fourthMenu, "DeepBump")
         self.tabWidget.addTab(self.fifthMenu, "Marigold")
         self.tabWidget.addTab(self.sixthMenu, "Pixel Range Conversion")
@@ -156,24 +156,24 @@ class StableDiffusionMenu(QWidget):
         # Create QLineEdit and QLabel for Prompt1
         self.prompt1Label = QLabel("Prompt1")
         self.prompt1LineEdit = QLineEdit()
-        self.prompt1LineEdit.setText("set a prompt please")
+        self.prompt1LineEdit.setText("texture, prompt, top down close-up")
         # Create QLineEdit and QLabel for Negative Prompt1
         self.negativePrompt1LineEdit = QLineEdit()
+        self.negativePrompt1LineEdit.setText("ugly, deformed, noisy, blurry, unrealistic, shadows")
 
 
 
         # Create the height slider
         
         self.heightSlider = QSlider(Qt.Horizontal)
-        self.heightSlider.setMinimum(64) 
+        self.heightSlider.setMinimum(512) 
         self.heightSlider.setMaximum(2048)  
         self.heightSlider.setValue(1024)    
-        self.heightSlider.setSingleStep(8)
         self.heightSlider.valueChanged.connect(self.updateHeight)
         # Create the height Spin Box
         self.heightSpinBox = QSpinBox()
         self.heightSpinBox.setMinimumWidth(100)
-        self.heightSpinBox.setMinimum(64)
+        self.heightSpinBox.setMinimum(512)
         self.heightSpinBox.setMaximum(2048)
         self.heightSpinBox.setValue(1024)  
         self.heightSlider.valueChanged.connect(self.heightSpinBox.setValue)
@@ -186,16 +186,16 @@ class StableDiffusionMenu(QWidget):
 
         # Create the width slider
         self.widthSlider = QSlider(Qt.Horizontal)
-        self.widthSlider.setMinimum(64) 
+        self.widthSlider.setMinimum(512) 
         self.widthSlider.setMaximum(2048)  
         self.widthSlider.setValue(1024)    
-        self.widthSlider.setSingleStep(8)
         self.widthSlider.valueChanged.connect(self.updateWidth)
         # Create the width Spin Box
         self.widthSpinBox = QSpinBox()
         self.widthSpinBox.setMinimumWidth(100)
-        self.widthSpinBox.setMinimum(64)
+        self.widthSpinBox.setMinimum(512)
         self.widthSpinBox.setMaximum(2048)
+        self.widthSpinBox.stepBy(16)
         self.widthSpinBox.setValue(1024)  
         self.widthSlider.valueChanged.connect(self.widthSpinBox.setValue)
         self.widthSpinBox.valueChanged.connect(self.widthSlider.setValue)
