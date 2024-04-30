@@ -13,24 +13,20 @@ class SDXLPipeline:
 
         
         self.set_padding(padding_mode='circular')
-
         self.load_models()
         self.save_settings()
-        # Pre-compile the model for faster inference if using TorchScript
-        self.load_default_settings()
+        self.set_refiner(False)
 
     def load_models(self):
         model_id = "stabilityai/stable-diffusion-xl-base-1.0"
-        # "dream-textures/texture-diffusion"
-        # "stabilityai/stable-diffusion-xl-base-1.0"
         self.base = DiffusionPipeline.from_pretrained(
             model_id,
             torch_dtype=torch.float16,
             use_safetensors=True,
             variant="fp16",
-        ).to("cuda")
-        # self.base.enable_model_cpu_offload()
-        # self.base.enable_xformers_memory_efficient_attention()
+        )
+        # .to("cuda")
+        self.base.enable_model_cpu_offload()
 
         self.refiner = DiffusionPipeline.from_pretrained(
             "stabilityai/stable-diffusion-xl-refiner-1.0",
@@ -39,10 +35,8 @@ class SDXLPipeline:
             torch_dtype=torch.float16,
             use_safetensors=True,
             variant="fp16",
-            ).to("cuda")
-        # self.refiner.enable_xformers_memory_efficient_attention()
-        # self.refiner.enable_model_cpu_offload()
-        # self.base.unet = torch.compile(self.base.unet, mode="reduce-overhead", fullgraph=True)
+            )
+        self.refiner.enable_model_cpu_offload()
 
     def generate_image(self, index):
         # Run both experts
@@ -52,20 +46,20 @@ class SDXLPipeline:
         returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
         requires_pooled=[False, True]
         )
-        self.prompt = self.prompt.strip()
-        conditioning_embeds, pooled_embeds = compel(self.prompt)
-        generator = torch.Generator().manual_seed(self.seed + index)
+        self.prompt = self.generateSettings["prompt"].strip()
+        conditioning_embeds, pooled_embeds = compel(self.generateSettings["prompt"])
+        generator = torch.Generator().manual_seed(self.generateSettings["seed"] + index)
         if self.refinerBool:
             image = self.base(
                 # prompt_embeds=conditioning_embeds,
                 # pooled_prompt_embeds=pooled_embeds,
-                prompt = self.prompt,
-                negative_prompt = self.negative_prompt,
-                num_inference_steps=self.steps,
-                denoising_end=self.denoising_fraction,
-                guidance_scale = self.CFG,
-                height = self.height,
-                width = self.width,
+                prompt = self.generateSettings["prompt"],
+                negative_prompt = self.generateSettings["negativePrompt"],
+                num_inference_steps=self.generateSettings["numInferenceSteps"],
+                denoising_end=self.generateSettings["denoisingEnd"],
+                guidance_scale = self.generateSettings["CFG"],
+                height = self.generateSettings["height"],
+                width = self.generateSettings["width"],
                 generator = generator,
                 output_type="latent",
             ).images
@@ -73,27 +67,27 @@ class SDXLPipeline:
             image = self.refiner(
                 # prompt_embeds=conditioning_embeds,
                 # pooled_prompt_embeds=pooled_embeds,
-                prompt = self.prompt,
-                negative_prompt = self.negative_prompt,
-                num_inference_steps=self.steps,
-                denoising_start=self.denoising_fraction,
-                guidance_scale = self.CFG,
-                height = self.height,
-                width = self.width,
+                prompt = self.generateSettings["prompt"],
+                negative_prompt = self.generateSettings["negativePrompt"],
+                num_inference_steps= self.generateSettings["numInferenceSteps"],
+                denoising_start= self.generateSettings["denoisingEnd"],
+                guidance_scale = self.generateSettings["CFG"],
+                height = self.generateSettings["height"],
+                width =  self.generateSettings["width"],
                 generator = generator,
                 image=image,
             ).images[0]
-
+            
         else:
             image = self.base(
                 # prompt_embeds=conditioning_embeds,
                 # pooled_prompt_embeds=pooled_embeds,
-                prompt = self.prompt,
-                negative_prompt = self.negative_prompt,
-                num_inference_steps=self.steps,
-                guidance_scale = self.CFG,
-                height = self.height,
-                width = self.width,
+                prompt = self.generateSettings["prompt"],
+                negative_prompt = self.generateSettings["negativePrompt"],
+                num_inference_steps=self.generateSettings["numInferenceSteps"],
+                guidance_scale = self.generateSettings["CFG"],
+                height =  self.generateSettings["height"],
+                width = self.generateSettings["width"],
                 generator = generator,
             ).images[0]
 
@@ -101,17 +95,6 @@ class SDXLPipeline:
         image.save(file_path)
         return file_path
     
-
-    def load_default_settings(self):
-        self.set_prompts()
-        self.set_inference_steps(30)
-        self.set_denoising_fraction(.8)
-        self.set_CFG(5.0)
-        self.set_height(1024)
-        self.set_width(1024)
-        self.set_seed(randint(1, 999999))
-        self.set_refiner(False)
-  
 
     # load all the schedulers
     def set_scheduler(self, scheduler_str):
@@ -177,9 +160,6 @@ class SDXLPipeline:
         self.settings.setValue("SchedulersList",list(compatible_schedulers))
         
 
-    def set_prompts(self, prompt = "default", negative_prompt = None):
-        self.prompt = prompt
-        self.negative_prompt = negative_prompt
 
     def set_padding(self, **patch):
         cls = torch.nn.Conv2d
@@ -188,18 +168,12 @@ class SDXLPipeline:
             return init(self, *args, **kwargs, **patch)
         cls.__init__ = __init__
 
-    def set_inference_steps(self, steps):
-        self.steps = steps
-    def set_denoising_fraction(self, fraction):
-        self.denoising_fraction = fraction
-    def set_CFG(self, CFG):
-        self.CFG = CFG
-    def set_height(self, height):
-        self.height = height
-    def set_width(self, width):
-        self.width = width
-    def set_seed(self, seed):
-        self.seed = seed
-    def set_refiner(self, state):
-        self.refinerBool = state
-        print(f"Refiner set to {state}")
+    
+    def set_settings(self, settingsDict):
+        self.generateSettings = settingsDict
+    
+    def set_refiner(self, refinerBool):
+        self.refinerBool = refinerBool
+
+
+

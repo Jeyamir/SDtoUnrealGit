@@ -1,14 +1,16 @@
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget,  QPushButton, QLineEdit, QVBoxLayout,QHBoxLayout, QWidget, QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget, QFileDialog, QComboBox, QSpinBox, QSlider, QCheckBox, QDoubleSpinBox
 from PySide6.QtGui import QPixmap, QFont
-from PySide6.QtCore import QSettings, Qt, Slot
+from PySide6.QtCore import QSettings, Qt, Slot, QThread
 from random import randint
 from PipelineSDXL import SDXLPipeline
 # from QtAdapters import AdapterWindow
 from QtDeepBump import ImageProcessor
 from utils_Qt import addFormRow
+from QtThread import WorkerThread
 from QtMarigold import MarigoldWindow
 from convertimagerange import PixelRangeConversionApp
+from QtThread import WorkerThread
 
 class MainWindow(QMainWindow):
     def __init__(self, model = None):
@@ -35,8 +37,7 @@ class MainWindow(QMainWindow):
         self.tabWidget.addTab(self.fourthMenu, "DeepBump")
         self.tabWidget.addTab(self.fifthMenu, "Marigold")
         self.tabWidget.addTab(self.sixthMenu, "Pixel Range Conversion")
-
-        
+          
 
 class SetupMenu(QWidget):
     def __init__(self):
@@ -103,8 +104,9 @@ class StableDiffusionMenu(QWidget):
         QPushButton:hover {
             background-color: #0056b3;
         }
-    """
+    """        
         self.SDXL = SDXLPipeline()
+
         # Central widget and layout
         self.layout = QVBoxLayout(self)
         self.opacity_effect = QGraphicsOpacityEffect()
@@ -120,14 +122,12 @@ class StableDiffusionMenu(QWidget):
         self.inferenceStepsSpinBox.setSingleStep(1) # Set step size
         self.inferenceStepsSpinBox.setValue(30)  
         self.inferenceStepsSpinBoxLabel = QLabel("Inference Steps")
-        self.inferenceStepsSpinBox.valueChanged.connect(self.updateInferenceSteps)
 
         # Create the Denoising Fraction slider
         self.denoisingFractionSlider = QSlider(Qt.Horizontal)
         self.denoisingFractionSlider.setMinimum(1) 
         self.denoisingFractionSlider.setMaximum(100)  
         self.denoisingFractionSlider.setValue(80)    
-        self.denoisingFractionSlider.valueChanged.connect(self.updateDenoisingFraction)
         self.denoisingFractionSlider.setEnabled(False)
         # Label for the denoising fraction
         self.FractionLabel = QLabel("Refiner Starts at:")
@@ -139,7 +139,6 @@ class StableDiffusionMenu(QWidget):
         self.guidanceScaleSpinBox.setMinimum(0)  # Set minimum value
         self.guidanceScaleSpinBoxLabel = QLabel("Guidance Scale (CFG)")
         self.guidanceScaleSpinBox.setValue(5.0)  
-        self.guidanceScaleSpinBox.valueChanged.connect(self.updateGuidanceScale)
 
         # Random Seed Spin Box
         self.seedSpinBox = QSpinBox()
@@ -147,10 +146,8 @@ class StableDiffusionMenu(QWidget):
         self.seedSpinBox.setMaximum(999999)
         self.seedSpinBox.setValue(0)  
         self.seedSpinBox.setEnabled(False)
-        self.seedSpinBox.valueChanged.connect(self.updateSeed)
         self.seedCheckBox = QCheckBox()
         self.seedCheckBox.stateChanged.connect(self.seedSpinBox.setEnabled)
-        self.seedCheckBox.stateChanged.connect(self.randomizeSeed)
 
 
         # Create QLineEdit and QLabel for Prompt1
@@ -166,14 +163,13 @@ class StableDiffusionMenu(QWidget):
         # Create the height slider
         
         self.heightSlider = QSlider(Qt.Horizontal)
-        self.heightSlider.setMinimum(512) 
+        self.heightSlider.setMinimum(768) 
         self.heightSlider.setMaximum(2048)  
         self.heightSlider.setValue(1024)    
-        self.heightSlider.valueChanged.connect(self.updateHeight)
         # Create the height Spin Box
         self.heightSpinBox = QSpinBox()
         self.heightSpinBox.setMinimumWidth(100)
-        self.heightSpinBox.setMinimum(512)
+        self.heightSpinBox.setMinimum(768)
         self.heightSpinBox.setMaximum(2048)
         self.heightSpinBox.setValue(1024)  
         self.heightSlider.valueChanged.connect(self.heightSpinBox.setValue)
@@ -183,17 +179,17 @@ class StableDiffusionMenu(QWidget):
         self.heightLayout.addWidget(self.heightSpinBox)
         # Label for the height slider
         self.heightLabel = QLabel("Height")
+        
 
         # Create the width slider
         self.widthSlider = QSlider(Qt.Horizontal)
-        self.widthSlider.setMinimum(512) 
+        self.widthSlider.setMinimum(768) 
         self.widthSlider.setMaximum(2048)  
         self.widthSlider.setValue(1024)    
-        self.widthSlider.valueChanged.connect(self.updateWidth)
         # Create the width Spin Box
         self.widthSpinBox = QSpinBox()
         self.widthSpinBox.setMinimumWidth(100)
-        self.widthSpinBox.setMinimum(512)
+        self.widthSpinBox.setMinimum(768)
         self.widthSpinBox.setMaximum(2048)
         self.widthSpinBox.stepBy(16)
         self.widthSpinBox.setValue(1024)  
@@ -208,7 +204,6 @@ class StableDiffusionMenu(QWidget):
         # number of images
         self.batchSpinBox = QSpinBox()
         self.batchSpinBox.setMinimum(1) 
-        self.batchSpinBox.setMaximum(4)
 
         # Button to generate output
         self.generateButton = QPushButton("Generate", self)
@@ -224,88 +219,40 @@ class StableDiffusionMenu(QWidget):
 
         # Labels for displaying the image
         self.imageLabels = [QLabel(self) for _ in range(4)]
+        for label in self.imageLabels:
+            label.setFixedSize(200, 200)
 
         # FORMATTING----------------------------------------------------------------------------------------------------------------
-        # self.layout.addWidget(self.negativePrompt1LineEdit)
         addFormRow(self.layout,"Prompt", self.prompt1LineEdit)
         addFormRow(self.layout,"Negative Prompt", self.negativePrompt1LineEdit)
-
-        
-        # scheduler
-        # layout.addWidget(self.schedulerLabel)
-        # self.layout.addWidget(self.schedulerComboBox)
         addFormRow(self.layout, "Scheduler", self.schedulerComboBox)
-
-        # inference steps
-        # layout.addWidget(self.inferenceStepsSpinBoxLabel)
-        # self.layout.addWidget(self.inferenceStepsSpinBox)
         addFormRow(self.layout,"Inference Steps", self.inferenceStepsSpinBox)
-
         self.layout.addWidget(self.refinerCheckBox)
-    
-        # denoising fraction
-        # layout.addWidget(self.FractionLabel)
-        # self.layout.addWidget(self.denoisingFractionSlider)
         addFormRow(self.layout,"Refiner Starts at", self.denoisingFractionSlider)
         self.layout.addWidget(self.denoisingFractionLabel)
-
-        # guidance scale
-        # layout.addWidget(self.guidanceScaleSpinBoxLabel)
-        # self.layout.addWidget(self.guidanceScaleSpinBox)
         addFormRow(self.layout,"Guidance Scale (CFG)", self.guidanceScaleSpinBox)
-
-        # random seed
-        # layout.addWidget(self.seedSpinBoxLabel)
-        # self.layout.addLayout(self.seedLayout)
         addFormRow(self.layout,"Custom Seed", self.seedSpinBox, self.seedCheckBox)
-
-        # prompts
-        # layout.addWidget(self.prompt1Label)
-        # self.layout.addWidget(self.prompt1LineEdit)
-
-
-        # height slider
         self.layout.addWidget(self.heightLabel)
         self.layout.addLayout(self.heightLayout)
-   
-        
-
-        # width slider
         self.layout.addWidget(self.widthLabel)
         self.layout.addLayout(self.widthLayout)
-
-
-        # batch spin box
-        # self.layout.addWidget(self.batchSpinBox)
         addFormRow(self.layout,"Number of Images", self.batchSpinBox)
-
-        # generate button
         self.layout.addWidget(self.generateButton)
-
-
         # output images
-        self.imagesLayout = QHBoxLayout()
-        self.imagesLayout.addWidget(self.imageLabels[0])
-        self.imagesLayout.addWidget(self.imageLabels[1])
-        self.imagesLayout.addWidget(self.imageLabels[2])
-        self.imagesLayout.addWidget(self.imageLabels[3])
-        self.layout.addLayout(self.imagesLayout)
-
-
+        self.imagesTopLayout = QHBoxLayout()
+        self.imagesTopLayout.addWidget(self.imageLabels[0])
+        self.imagesTopLayout.addWidget(self.imageLabels[1])
+        self.imagesBottomLayout = QHBoxLayout()
+        self.imagesBottomLayout.addWidget(self.imageLabels[2])
+        self.imagesBottomLayout.addWidget(self.imageLabels[3])
+        self.layout.addLayout(self.imagesTopLayout)
+        self.layout.addLayout(self.imagesBottomLayout)
 
         self.layout.addStretch()
         self.load_settings()
         self.SDXL.set_scheduler("EulerDiscreteScheduler")
 
-    # def addFormRow(self, labelText, widget, optionalWidget=None):
-    #     rowLayout = QHBoxLayout()
-    #     rowLayout.addWidget(QLabel(labelText))
-    #     rowLayout.addWidget(widget)
-    #     if optionalWidget:
-    #         widget.setEnabled(False)
-    #         rowLayout.addWidget(optionalWidget)
-    #     self.layout.addLayout(rowLayout)
-        
+
     def load_settings(self):
         # Read the setting as a list/convert to tuple
         self.settings = QSettings("Ashill", "SDtoUnreal")
@@ -316,67 +263,38 @@ class StableDiffusionMenu(QWidget):
                     self.schedulerComboBox.addItem(option)
         self.schedulerComboBox.setCurrentText("EulerDiscreteScheduler")
 
+
     @Slot()
     def generateClicked(self):
         if not self.seedCheckBox.isChecked():
             self.updateSeed(randint(1, 999999))
-        prompt1 = self.prompt1LineEdit.text()
-        negative_prompt1 = self.negativePrompt1LineEdit.text()
+        self.setSettings()
 
-        self.SDXL.set_prompts(prompt1, negative_prompt1)
-        # pixmaps = [None]*4  
-        for i in range(self.batchSpinBox.value()):
-            imagePath = self.SDXL.generate_image(i)
-            self.imagesLayout = QHBoxLayout()
-            if imagePath:
-                pixmap = QPixmap(imagePath)
-                # pixmap.scaled(self.imageLabel.width(), self.imageLabel.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                # pixmap = pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.imageLabels[i].setPixmap(pixmap)
-                self.imageLabels[i].adjustSize()
-                self.imageLabels[i].setScaledContents(True)
+        self.worker = WorkerThread(self.SDXL, self.batchSpinBox.value())
+        self.generateButton.setText("Generating...")
+        # Connect signals and slots
+        self.worker.finished.connect(self.worker.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.finished.connect(lambda: self.generateButton.setEnabled(True))
+        self.worker.finished.connect(lambda: self.generateButton.setText("Generate"))
+        self.worker.returnpath.connect(self.handle_result)
 
+        # Step 6: Start the thread
+        self.worker.start()
+
+        # Disable button while task is running
+        self.generateButton.setEnabled(False)
+
+    def handle_result(self, path, i):
+            self.imageLabels[i%4].setPixmap(QPixmap(path))
+            self.imageLabels[i%4].setScaledContents(True)
+            self.imageLabels[i%4].setAlignment(Qt.AlignCenter)
 
     @Slot()
     def setScheduler(self, index):
-        self.SDXL.set_scheduler(self.schedulerComboBox.currentText())
-
-    @Slot()
-    def updateDenoisingFraction(self):
-        # Divide by 100 to convert back to the desired floating point range
-        value = self.denoisingFractionSlider.value() / 100
-        self.denoisingFractionLabel.setText(f"{value:.1f}")
-        self.SDXL.set_denoising_fraction(value)
-
-    @Slot()
-    def updateInferenceSteps(self, value):
-        self.SDXL.set_inference_steps(value)
-
-    @Slot()
-    def updateGuidanceScale(self, value):
-        self.SDXL.set_CFG(value)
-
-    @Slot()
-    def updateHeight(self):
-        # Divide by 100 to convert back to the desired floating point range
-        value = self.heightSlider.value()
-        self.SDXL.set_height(value)
+        self.SDXL.set_scheduler(self.schedulerComboBox.currentText())\
         
-    @Slot()
-    def updateWidth(self):
-        # Divide by 100 to convert back to the desired floating point range
-        value = self.widthSlider.value()
-        self.SDXL.set_width(value)
-        
-    @Slot()
-    def updateSeed(self, value):
-        self.SDXL.set_seed(value)
-        
-    @Slot()
-    def randomizeSeed(self, state):
-        random_int = randint(1, 999999)
-        self.SDXL.set_seed(random_int)
-        self.seedSpinBox.setValue(random_int)
+
 
     @Slot()
     def setRefiner(self, state):
@@ -384,18 +302,42 @@ class StableDiffusionMenu(QWidget):
             self.SDXL.set_refiner(True)
             self.denoisingFractionLabel.setText(".8")
             self.denoisingFractionSlider.setValue(80)
-            self.SDXL.set_denoising_fraction(.8)
         else:
             self.SDXL.set_refiner(False)
 
+    def setSettings(self):
+        settings = {
+            "prompt": self.prompt1LineEdit.text(),
+            "negativePrompt": self.negativePrompt1LineEdit.text(),
+            "numInferenceSteps": self.inferenceStepsSpinBox.value(),
+            "denoisingEnd": self.denoisingFractionSlider.value()/100.0,
+            "CFG": self.guidanceScaleSpinBox.value(),
+            "height": self.heightSpinBox.value(),
+            "width": self.widthSpinBox.value(),
+            "seed": self.seedSpinBox.value(),
+            "numImagesPerPrompt": self.batchSpinBox.value()
+        }
+        print(settings)
+        
+        self.SDXL.set_settings(settings)
+
+    def updateSeed(self, seed):
+        self.seedSpinBox.setValue(seed)
 
 
+# def handle_app_exit():
+#     """Function to stop all worker threads before app exits."""
+#     if hasattr(window.secondMenu, 'worker'):
+#         window.secondMenu.worker.stop()
+#         window.secondMenu.worker.wait()
 
 def run_gui_app(image_path=None):
     app = QApplication(sys.argv)
     window = MainWindow()
+    # app.aboutToQuit.connect(handle_app_exit)
     window.show()
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     run_gui_app()
