@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget,  QPushButton, QLineEdit, QVBoxLayout,QHBoxLayout, QWidget, QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget, QFileDialog, QComboBox, QSpinBox, QSlider, QCheckBox, QDoubleSpinBox
+from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget, QGroupBox, QPushButton, QLineEdit, QVBoxLayout,QHBoxLayout, QWidget, QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget, QFileDialog, QComboBox, QSpinBox, QSlider, QCheckBox, QDoubleSpinBox
 from PySide6.QtGui import QPixmap, QFont
 from PySide6.QtCore import QSettings, Qt, Slot, QThread
 from random import randint
@@ -111,6 +111,17 @@ class StableDiffusionMenu(QWidget):
         self.layout = QVBoxLayout(self)
         self.opacity_effect = QGraphicsOpacityEffect()
         self.opacity_effect.setOpacity(0.5)  # Set the opacity here (0.0 to 1.0)
+
+        self.tilingCheckBox = QCheckBox("Tiling")
+        
+        
+
+        self.modelComboBox = QComboBox(self)
+        self.modelComboBox.addItem("Stable Diffusion XL")
+        self.modelComboBox.addItem("Stable Diffusion XL Lightning")
+        self.modelLoadButton = QPushButton("Load Model", self)
+        self.modelLoadButton.clicked.connect(self.loadModel)
+ 
         # Dropdown menu for Scheduler
         self.schedulerComboBox = QComboBox(self)
         self.schedulerComboBox.currentIndexChanged.connect(self.setScheduler)
@@ -133,6 +144,7 @@ class StableDiffusionMenu(QWidget):
         self.FractionLabel = QLabel("Refiner Starts at:")
         self.denoisingFractionLabel = QLabel(".8")
         self.denoisingFractionLabel.setAlignment(Qt.AlignCenter)
+        self.denoisingFractionSlider.valueChanged.connect(lambda: self.denoisingFractionLabel.setText(str(self.denoisingFractionSlider.value()/100)))
 
         # CFG Spin Box
         self.guidanceScaleSpinBox = QDoubleSpinBox()
@@ -153,10 +165,10 @@ class StableDiffusionMenu(QWidget):
         # Create QLineEdit and QLabel for Prompt1
         self.prompt1Label = QLabel("Prompt1")
         self.prompt1LineEdit = QLineEdit()
-        self.prompt1LineEdit.setText("texture, prompt, top down close-up")
+        self.prompt1LineEdit.setText("texture, prompt,  top down close up, 135mm IMAX, UHD, 8k, f10, dslr, hdr")
         # Create QLineEdit and QLabel for Negative Prompt1
         self.negativePrompt1LineEdit = QLineEdit()
-        self.negativePrompt1LineEdit.setText("ugly, deformed, noisy, blurry, unrealistic, shadows")
+        self.negativePrompt1LineEdit.setText("unrealistic, shadows")
 
 
 
@@ -223,21 +235,35 @@ class StableDiffusionMenu(QWidget):
             label.setFixedSize(200, 200)
 
         # FORMATTING----------------------------------------------------------------------------------------------------------------
-        addFormRow(self.layout,"Prompt", self.prompt1LineEdit)
-        addFormRow(self.layout,"Negative Prompt", self.negativePrompt1LineEdit)
-        addFormRow(self.layout, "Scheduler", self.schedulerComboBox)
-        addFormRow(self.layout,"Inference Steps", self.inferenceStepsSpinBox)
-        self.layout.addWidget(self.refinerCheckBox)
-        addFormRow(self.layout,"Refiner Starts at", self.denoisingFractionSlider)
-        self.layout.addWidget(self.denoisingFractionLabel)
-        addFormRow(self.layout,"Guidance Scale (CFG)", self.guidanceScaleSpinBox)
-        addFormRow(self.layout,"Custom Seed", self.seedSpinBox, self.seedCheckBox)
-        self.layout.addWidget(self.heightLabel)
-        self.layout.addLayout(self.heightLayout)
-        self.layout.addWidget(self.widthLabel)
-        self.layout.addLayout(self.widthLayout)
-        addFormRow(self.layout,"Number of Images", self.batchSpinBox)
-        self.layout.addWidget(self.generateButton)
+        loadBox = QGroupBox("Load Model")
+        self.modelLayout = QVBoxLayout()
+        loadBox.setLayout(self.modelLayout)
+        addFormRow(self.modelLayout,"Model", self.modelComboBox, self.modelLoadButton)
+        self.modelLayout.addWidget(self.tilingCheckBox)
+        self.layout.addWidget(loadBox)
+
+
+        self.runBox = QGroupBox("Run Model")
+        self.runLayout = QVBoxLayout()
+        self.runBox.setLayout(self.runLayout)
+
+        addFormRow(self.runLayout,"Prompt", self.prompt1LineEdit)
+        addFormRow(self.runLayout,"Negative Prompt", self.negativePrompt1LineEdit)
+
+
+        addFormRow(self.runLayout, "Scheduler", self.schedulerComboBox)
+        addFormRow(self.runLayout,"Inference Steps", self.inferenceStepsSpinBox)
+        self.runLayout.addWidget(self.refinerCheckBox)
+        addFormRow(self.runLayout,"Refiner Starts at", self.denoisingFractionSlider)
+        self.runLayout.addWidget(self.denoisingFractionLabel)
+        addFormRow(self.runLayout,"Guidance Scale (CFG)", self.guidanceScaleSpinBox)
+        addFormRow(self.runLayout,"Custom Seed", self.seedSpinBox, self.seedCheckBox, False)
+        self.runLayout.addWidget(self.heightLabel)
+        self.runLayout.addLayout(self.heightLayout)
+        self.runLayout.addWidget(self.widthLabel)
+        self.runLayout.addLayout(self.widthLayout)
+        addFormRow(self.runLayout,"Number of Images", self.batchSpinBox)
+        self.runLayout.addWidget(self.generateButton)
         # output images
         self.imagesTopLayout = QHBoxLayout()
         self.imagesTopLayout.addWidget(self.imageLabels[0])
@@ -245,12 +271,12 @@ class StableDiffusionMenu(QWidget):
         self.imagesBottomLayout = QHBoxLayout()
         self.imagesBottomLayout.addWidget(self.imageLabels[2])
         self.imagesBottomLayout.addWidget(self.imageLabels[3])
-        self.layout.addLayout(self.imagesTopLayout)
-        self.layout.addLayout(self.imagesBottomLayout)
-
+        self.runLayout.addLayout(self.imagesTopLayout)
+        self.runLayout.addLayout(self.imagesBottomLayout)
+        self.layout.addWidget(self.runBox)
+        self.runBox.setEnabled(False)
+        self.runBox.setGraphicsEffect(self.opacity_effect)
         self.layout.addStretch()
-        self.load_settings()
-        self.SDXL.set_scheduler("EulerDiscreteScheduler")
 
 
     def load_settings(self):
@@ -315,26 +341,47 @@ class StableDiffusionMenu(QWidget):
             "height": self.heightSpinBox.value(),
             "width": self.widthSpinBox.value(),
             "seed": self.seedSpinBox.value(),
-            "numImagesPerPrompt": self.batchSpinBox.value()
+            "numImagesPerPrompt": self.batchSpinBox.value(),
+            "tiling": self.tilingCheckBox.isChecked()
         }
         print(settings)
         
         self.SDXL.set_settings(settings)
+    def loadModel(self):
+        if not self.runBox.isEnabled():
+            self.runBox.setGraphicsEffect(None)
+            self.runBox.setEnabled(True)
+        loadSettingsDict = {
+            "model": self.modelComboBox.currentText(),
+            "tiling": self.tilingCheckBox.isChecked()
+        }
+
+        if loadSettingsDict["model"] == "Stable Diffusion XL Lightning":
+            self.inferenceStepsSpinBox.setValue(4)
+            self.inferenceStepsSpinBox.setEnabled(False)
+            self.guidanceScaleSpinBox.setValue(0)
+            self.guidanceScaleSpinBox.setEnabled(False)
+            self.refinerCheckBox.setChecked(False)
+            self.refinerCheckBox.setEnabled(False)
+        else:
+            self.inferenceStepsSpinBox.setEnabled(True)
+            self.inferenceStepsSpinBox.setValue(30)
+            self.guidanceScaleSpinBox.setValue(5)
+            self.guidanceScaleSpinBox.setEnabled(True)
+            self.refinerCheckBox.setEnabled(True)
+        self.SDXL.load_models(loadSettingsDict)
+        self.load_settings()
+        self.SDXL.set_scheduler("EulerDiscreteScheduler")
+
 
     def updateSeed(self, seed):
         self.seedSpinBox.setValue(seed)
 
 
-# def handle_app_exit():
-#     """Function to stop all worker threads before app exits."""
-#     if hasattr(window.secondMenu, 'worker'):
-#         window.secondMenu.worker.stop()
-#         window.secondMenu.worker.wait()
 
 def run_gui_app(image_path=None):
     app = QApplication(sys.argv)
     window = MainWindow()
-    # app.aboutToQuit.connect(handle_app_exit)
     window.show()
     sys.exit(app.exec())
 

@@ -1,6 +1,8 @@
 import torch
-from diffusers import DiffusionPipeline, DDIMScheduler, KDPM2DiscreteScheduler, PNDMScheduler, DPMSolverSDEScheduler, EulerAncestralDiscreteScheduler, DDPMScheduler, DEISMultistepScheduler, DPMSolverMultistepScheduler, KDPM2AncestralDiscreteScheduler, EDMEulerScheduler, HeunDiscreteScheduler, LMSDiscreteScheduler, EulerDiscreteScheduler, UniPCMultistepScheduler, DPMSolverSinglestepScheduler
+from diffusers import DiffusionPipeline, UNet2DConditionModel, DDIMScheduler, KDPM2DiscreteScheduler, PNDMScheduler, DPMSolverSDEScheduler, EulerAncestralDiscreteScheduler, DDPMScheduler, DEISMultistepScheduler, DPMSolverMultistepScheduler, KDPM2AncestralDiscreteScheduler, EDMEulerScheduler, HeunDiscreteScheduler, LMSDiscreteScheduler, EulerDiscreteScheduler, UniPCMultistepScheduler, DPMSolverSinglestepScheduler
 from PySide6.QtCore import QSettings
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
 from compel import Compel, ReturnedEmbeddingsType
 
 # from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
@@ -9,51 +11,73 @@ import re
 # from accelerate import Accelerator
 
 class SDXLPipeline:
-    def __init__(self, model = "stabilityai/stable-diffusion-xl-refiner-1.0"):
+    def __init__(self):
 
         
-        self.set_padding(padding_mode='circular')
-        self.load_models()
-        self.save_settings()
         self.set_refiner(False)
 
-    def load_models(self):
-        model_id = "stabilityai/stable-diffusion-xl-base-1.0"
-        self.base = DiffusionPipeline.from_pretrained(
-            model_id,
-            torch_dtype=torch.float16,
-            use_safetensors=True,
-            variant="fp16",
-        )
-        # .to("cuda")
-        self.base.enable_model_cpu_offload()
 
-        self.refiner = DiffusionPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-xl-refiner-1.0",
-            text_encoder_2=self.base.text_encoder_2,
-            # vae=self.base.vae,
-            torch_dtype=torch.float16,
-            use_safetensors=True,
-            variant="fp16",
+    def load_models(self, loadSettings):
+        if loadSettings["tiling"] == "True":
+            self.set_padding(padding_mode="circular")
+        else:
+            self.set_padding(padding_mode="zeros")
+
+
+        self.base = None
+        self.refiner = None
+        model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+        if loadSettings['model'] == "Stable Diffusion XL Lightning":
+            print("Loading lightning checkpoint")
+            repo = "ByteDance/SDXL-Lightning"
+            ckpt = "sdxl_lightning_4step_unet.safetensors"
+            unet_config = UNet2DConditionModel.load_config(model_id, subfolder="unet")
+            # Instantiate the model from its configuration.
+            unet = UNet2DConditionModel.from_config(unet_config).to("cuda", torch.float16)
+            # Load the model's weights.
+            unet.load_state_dict(load_file(hf_hub_download(repo, ckpt), device="cuda"))
+
+            # Create a pipeline with the model.
+            self.base = DiffusionPipeline.from_pretrained(model_id, unet=unet, torch_dtype=torch.float16, variant="fp16")
+
+        else:
+            print("Loading base and refiner models")
+            self.base = DiffusionPipeline.from_pretrained(
+                model_id,
+                torch_dtype=torch.float16,
+                use_safetensors=True,
+                variant="fp16",
             )
-        self.refiner.enable_model_cpu_offload()
+            # .to("cuda")
+            self.base.enable_model_cpu_offload()
+
+            self.refiner = DiffusionPipeline.from_pretrained(
+                model_id,
+                text_encoder_2=self.base.text_encoder_2,
+                # vae=self.base.vae,
+                torch_dtype=torch.float16,
+                use_safetensors=True,
+                variant="fp16",
+                )
+            self.refiner.enable_model_cpu_offload()
+        self.base.enable_model_cpu_offload()
+        self.save_settings()
 
     def generate_image(self, index):
-        # Run both experts
-        compel = Compel(
-        tokenizer=[self.base.tokenizer, self.base.tokenizer_2] ,
-        text_encoder=[self.base.text_encoder, self.base.text_encoder_2],
-        returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
-        requires_pooled=[False, True]
-        )
+        # compel = Compel(
+        # tokenizer=[self.base.tokenizer, self.base.tokenizer_2] ,
+        # text_encoder=[self.base.text_encoder, self.base.text_encoder_2],
+        # returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
+        # requires_pooled=[False, True]
+        # )
+        # conditioning_embeds, pooled_embeds = compel(self.generateSettings["prompt"])
         self.prompt = self.generateSettings["prompt"].strip()
-        conditioning_embeds, pooled_embeds = compel(self.generateSettings["prompt"])
         generator = torch.Generator().manual_seed(self.generateSettings["seed"] + index)
         if self.refinerBool:
             image = self.base(
                 # prompt_embeds=conditioning_embeds,
                 # pooled_prompt_embeds=pooled_embeds,
-                prompt = self.generateSettings["prompt"],
+                prompt = self.prompt,
                 negative_prompt = self.generateSettings["negativePrompt"],
                 num_inference_steps=self.generateSettings["numInferenceSteps"],
                 denoising_end=self.generateSettings["denoisingEnd"],
@@ -67,7 +91,7 @@ class SDXLPipeline:
             image = self.refiner(
                 # prompt_embeds=conditioning_embeds,
                 # pooled_prompt_embeds=pooled_embeds,
-                prompt = self.generateSettings["prompt"],
+                prompt = self.prompt,
                 negative_prompt = self.generateSettings["negativePrompt"],
                 num_inference_steps= self.generateSettings["numInferenceSteps"],
                 denoising_start= self.generateSettings["denoisingEnd"],
@@ -82,7 +106,7 @@ class SDXLPipeline:
             image = self.base(
                 # prompt_embeds=conditioning_embeds,
                 # pooled_prompt_embeds=pooled_embeds,
-                prompt = self.generateSettings["prompt"],
+                prompt = self.prompt,
                 negative_prompt = self.generateSettings["negativePrompt"],
                 num_inference_steps=self.generateSettings["numInferenceSteps"],
                 guidance_scale = self.generateSettings["CFG"],
@@ -102,7 +126,7 @@ class SDXLPipeline:
             self.base.scheduler = DDIMScheduler.from_config(self.base.scheduler.config)
             print("Scheduler set to DDIMScheduler")
         elif(scheduler_str == "KDPM2DiscreteScheduler"):
-            self.base.scheduler = KDPM2DiscreteScheduler.from_config(self.base.scheduler.config)
+            self.base.scheduler = KDPM2DiscreteScheduler.from_config(self.base.scheduler.config, )
             print("Scheduler set to KDPM2DiscreteScheduler")
         elif(scheduler_str == "PNDMScheduler"):
             self.base.scheduler = PNDMScheduler.from_config(self.base.scheduler.config)
@@ -136,7 +160,7 @@ class SDXLPipeline:
             self.base.scheduler = LMSDiscreteScheduler.from_config(self.base.scheduler.config)
         elif(scheduler_str == "EulerDiscreteScheduler"):
             print("Scheduler set to EulerDiscreteScheduler")
-            self.base.scheduler = EulerDiscreteScheduler.from_config(self.base.scheduler.config)
+            self.base.scheduler = EulerDiscreteScheduler.from_config(self.base.scheduler.config, timestep_spacing="trailing")
         elif(scheduler_str == "UniPCMultistepScheduler"):
             print("Scheduler set to UniPCMultistepScheduler")
             self.base.scheduler = UniPCMultistepScheduler.from_config(self.base.scheduler.config)
@@ -158,16 +182,16 @@ class SDXLPipeline:
                 result = match.group(1)
                 compatible_schedulers.append(result)
         self.settings.setValue("SchedulersList",list(compatible_schedulers))
-        
-
 
     def set_padding(self, **patch):
         cls = torch.nn.Conv2d
         init = cls.__init__
-        def __init__(self, *args, **kwargs):
-            return init(self, *args, **kwargs, **patch)
-        cls.__init__ = __init__
 
+        def __init__(self, *args, **kwargs):
+            kwargs.update(patch)  # Merge patch values into kwargs
+            return init(self, *args, **kwargs)
+
+        cls.__init__ = __init__
     
     def set_settings(self, settingsDict):
         self.generateSettings = settingsDict

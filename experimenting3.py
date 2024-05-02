@@ -1,89 +1,19 @@
-from PySide6.QtCore import QObject, QThread, Signal
-from PySide6.QtWidgets import QApplication, QVBoxLayout, QPushButton, QLabel, QWidget, QMainWindow
-import time
+import torch
+from diffusers import StableDiffusionXLPipeline, UNet2DConditionModel, EulerDiscreteScheduler
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
 
-class Task:
-    """A class that performs a specific task."""
-    def __init__(self, update_callback):
-        self.update_callback = update_callback
+base = "stabilityai/stable-diffusion-xl-base-1.0"
+repo = "ByteDance/SDXL-Lightning"
+ckpt = "sdxl_lightning_4step_unet.safetensors" # Use the correct ckpt for your step setting!
 
-    def run(self):
-        """Long-running task."""
-        for i in range(5):
-            time.sleep(1)
-            self.update_callback(i + 1)
+# Load model.
+unet = UNet2DConditionModel.from_config(base, subfolder="unet").to("cuda", torch.float16)
+unet.load_state_dict(load_file(hf_hub_download(repo, ckpt), device="cuda"))
+pipe = StableDiffusionXLPipeline.from_pretrained(base, unet=unet, torch_dtype=torch.float16, variant="fp16").to("cuda")
 
-class TaskThread(QThread):
-    """A QThread subclass to manage the task execution."""
-    finished = Signal()
-    progress = Signal(int)
+# Ensure sampler uses "trailing" timesteps.
+pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
 
-    def __init__(self, task, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.task = task
-
-    def run(self):
-        # Define a callback to update progress
-        def progress_callback(step):
-            self.progress.emit(step)
-        
-        # Set the callback and run the task
-        self.task.update_callback = progress_callback
-        self.task.run()
-        
-        # Emit finished signal after task completion
-        self.finished.emit()
-
-class Window(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.initUI()
-
-    def initUI(self):
-        self.setWindowTitle("Task Manager")
-
-        # Create layout
-        centralWidget = QWidget()
-        self.setCentralWidget(centralWidget)
-        layout = QVBoxLayout(centralWidget)
-
-        # Create a button to start the task
-        self.task_button = QPushButton("Start Task")
-        self.task_button.clicked.connect(self.start_task)
-        layout.addWidget(self.task_button)
-
-        # Create a label to show progress
-        self.progress_label = QLabel("Progress: 0")
-        layout.addWidget(self.progress_label)
-
-    def start_task(self):
-        # Step 2: Create a Task instance
-        task = Task(self.update_progress)
-
-        # Step 3: Create a TaskThread instance
-        self.worker = TaskThread(task)
-
-        # Connect signals and slots
-        self.worker.finished.connect(self.worker.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.worker.progress.connect(self.update_progress)
-        self.worker.finished.connect(lambda: self.task_button.setEnabled(True))
-        self.worker.finished.connect(lambda: self.progress_label.setText("Progress: 0"))
-
-        # Step 6: Start the thread
-        self.worker.start()
-
-        # Disable button while task is running
-        self.task_button.setEnabled(False)
-
-    def update_progress(self, step):
-        """Updates the progress label."""
-        self.progress_label.setText(f"Progress: {step}")
-
-if __name__ == "__main__":
-    app = QApplication([])
-
-    window = Window()
-    window.show()
-
-    app.exec_()
+# Ensure using the same inference steps as the loaded model and CFG set to 0.
+pipe("A girl smiling", num_inference_steps=4, guidance_scale=0).images[0].save("output.png")
