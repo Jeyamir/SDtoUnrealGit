@@ -1,5 +1,5 @@
 import torch
-from diffusers import DiffusionPipeline, UNet2DConditionModel, DDIMScheduler, KDPM2DiscreteScheduler, PNDMScheduler, DPMSolverSDEScheduler, EulerAncestralDiscreteScheduler, DDPMScheduler, DEISMultistepScheduler, DPMSolverMultistepScheduler, KDPM2AncestralDiscreteScheduler, EDMEulerScheduler, HeunDiscreteScheduler, LMSDiscreteScheduler, EulerDiscreteScheduler, UniPCMultistepScheduler, DPMSolverSinglestepScheduler
+from diffusers import DiffusionPipeline, UNet2DConditionModel, DDIMScheduler, KDPM2DiscreteScheduler, PNDMScheduler, EulerAncestralDiscreteScheduler, DDPMScheduler, DEISMultistepScheduler, DPMSolverMultistepScheduler, KDPM2AncestralDiscreteScheduler, EDMEulerScheduler, HeunDiscreteScheduler, LMSDiscreteScheduler, EulerDiscreteScheduler, UniPCMultistepScheduler, DPMSolverSinglestepScheduler
 from PySide6.QtCore import QSettings
 from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
@@ -18,30 +18,19 @@ class SDXLPipeline:
 
 
     def load_models(self, loadSettings):
-        if loadSettings["tiling"] == "True":
-            self.set_padding(padding_mode="circular")
-        else:
-            self.set_padding(padding_mode="zeros")
-
-
-        self.base = None
-        self.refiner = None
+        
+        targets = []
         model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+        refiner_id = "stabilityai/stable-diffusion-xl-refiner-1.0"
         if loadSettings['model'] == "Stable Diffusion XL Lightning":
-            print("Loading lightning checkpoint")
             repo = "ByteDance/SDXL-Lightning"
             ckpt = "sdxl_lightning_4step_unet.safetensors"
             unet_config = UNet2DConditionModel.load_config(model_id, subfolder="unet")
-            # Instantiate the model from its configuration.
             unet = UNet2DConditionModel.from_config(unet_config).to("cuda", torch.float16)
-            # Load the model's weights.
             unet.load_state_dict(load_file(hf_hub_download(repo, ckpt), device="cuda"))
-
-            # Create a pipeline with the model.
             self.base = DiffusionPipeline.from_pretrained(model_id, unet=unet, torch_dtype=torch.float16, variant="fp16")
 
         else:
-            print("Loading base and refiner models")
             self.base = DiffusionPipeline.from_pretrained(
                 model_id,
                 torch_dtype=torch.float16,
@@ -49,10 +38,9 @@ class SDXLPipeline:
                 variant="fp16",
             )
             # .to("cuda")
-            self.base.enable_model_cpu_offload()
 
             self.refiner = DiffusionPipeline.from_pretrained(
-                model_id,
+                refiner_id,
                 text_encoder_2=self.base.text_encoder_2,
                 # vae=self.base.vae,
                 torch_dtype=torch.float16,
@@ -60,9 +48,30 @@ class SDXLPipeline:
                 variant="fp16",
                 )
             self.refiner.enable_model_cpu_offload()
+                    
+            for item in self.refiner.components:
+                if "unet" in item or "vae" in item or "text_encoder" in item:
+                    module = getattr(self.refiner, item, None)  # Attempt to retrieve variable by name
+                    if module is not None:
+                        targets.append(module)
+
+
         self.base.enable_model_cpu_offload()
         self.save_settings()
 
+        for item in self.base.components:
+            if "unet" in item or "vae" in item or "text_encoder" in item:
+                module = getattr(self.base, item, None)  # Attempt to retrieve variable by name
+                if module is not None:
+                    targets.append(module)
+
+        self.conv_layers = []
+        self.conv_layers_original_paddings = []
+        for target in targets:
+            for module in target.modules():
+                if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.ConvTranspose2d):
+                    self.conv_layers.append(module)
+                    self.conv_layers_original_paddings.append(module.padding_mode)
     def generate_image(self, index):
         # compel = Compel(
         # tokenizer=[self.base.tokenizer, self.base.tokenizer_2] ,
@@ -71,9 +80,17 @@ class SDXLPipeline:
         # requires_pooled=[False, True]
         # )
         # conditioning_embeds, pooled_embeds = compel(self.generateSettings["prompt"])
+
+
+        for cl, opad in zip(self.conv_layers, self.conv_layers_original_paddings):
+            if self.generateSettings["tiling"] == True:
+                cl.padding_mode = "circular"
+            else:
+                cl.padding_mode = opad
+
         self.prompt = self.generateSettings["prompt"].strip()
         generator = torch.Generator().manual_seed(self.generateSettings["seed"] + index)
-        if self.refinerBool:
+        if self.genereateSettings["refiner"] == True:
             image = self.base(
                 # prompt_embeds=conditioning_embeds,
                 # pooled_prompt_embeds=pooled_embeds,
@@ -87,7 +104,6 @@ class SDXLPipeline:
                 generator = generator,
                 output_type="latent",
             ).images
-
             image = self.refiner(
                 # prompt_embeds=conditioning_embeds,
                 # pooled_prompt_embeds=pooled_embeds,
@@ -126,14 +142,11 @@ class SDXLPipeline:
             self.base.scheduler = DDIMScheduler.from_config(self.base.scheduler.config)
             print("Scheduler set to DDIMScheduler")
         elif(scheduler_str == "KDPM2DiscreteScheduler"):
-            self.base.scheduler = KDPM2DiscreteScheduler.from_config(self.base.scheduler.config, )
+            self.base.scheduler = KDPM2DiscreteScheduler.from_config(self.base.scheduler.config)
             print("Scheduler set to KDPM2DiscreteScheduler")
         elif(scheduler_str == "PNDMScheduler"):
             self.base.scheduler = PNDMScheduler.from_config(self.base.scheduler.config)
             print("Scheduler set to PNDMScheduler")
-        elif(scheduler_str == "DPMSolverSDEScheduler"):
-            self.base.scheduler = DPMSolverSDEScheduler.from_config(self.base.scheduler.config)
-            print("Scheduler set to DPMSolverSDEScheduler")
         elif(scheduler_str == "EulerAncestralDiscreteScheduler"):
             self.base.scheduler = EulerAncestralDiscreteScheduler.from_config(self.base.scheduler.config)
             print("Scheduler set to EulerAncestralDiscreteScheduler")
@@ -151,24 +164,19 @@ class SDXLPipeline:
             self.base.scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.base.scheduler.config)
         elif(scheduler_str == "EDMEulerScheduler"):
             print("Scheduler set to EDMEulerScheduler")
-            self.base.scheduler = EDMEulerScheduler.from_config(self.base.scheduler.config)
+            self.base.scheduler = EDMEulerScheduler.from_config(self.base.scheduler.config, timestep_spacing="trailing")
         elif(scheduler_str == "HeunDiscreteScheduler"):
             print("Scheduler set to HeunDiscreteScheduler")
             self.base.scheduler = HeunDiscreteScheduler.from_config(self.base.scheduler.config)
-        elif(scheduler_str == "LMSDiscreteScheduler"):
-            print("Scheduler set to LMSDiscreteScheduler")
-            self.base.scheduler = LMSDiscreteScheduler.from_config(self.base.scheduler.config)
         elif(scheduler_str == "EulerDiscreteScheduler"):
             print("Scheduler set to EulerDiscreteScheduler")
-            self.base.scheduler = EulerDiscreteScheduler.from_config(self.base.scheduler.config, timestep_spacing="trailing")
+            self.base.scheduler = EulerDiscreteScheduler.from_config(self.base.scheduler.config,  timestep_spacing="trailing")
         elif(scheduler_str == "UniPCMultistepScheduler"):
             print("Scheduler set to UniPCMultistepScheduler")
             self.base.scheduler = UniPCMultistepScheduler.from_config(self.base.scheduler.config)
         elif(scheduler_str == "DPMSolverSinglestepScheduler"):
             print("Scheduler set to DPMSolverSinglestepScheduler")
             self.base.scheduler = DPMSolverSinglestepScheduler.from_config(self.base.scheduler.config)
-        else:
-            ...
 
     # saving qsettings for the UI
     def save_settings(self):
@@ -183,21 +191,8 @@ class SDXLPipeline:
                 compatible_schedulers.append(result)
         self.settings.setValue("SchedulersList",list(compatible_schedulers))
 
-    def set_padding(self, **patch):
-        cls = torch.nn.Conv2d
-        init = cls.__init__
 
-        def __init__(self, *args, **kwargs):
-            kwargs.update(patch)  # Merge patch values into kwargs
-            return init(self, *args, **kwargs)
-
-        cls.__init__ = __init__
-    
     def set_settings(self, settingsDict):
         self.generateSettings = settingsDict
     
-    def set_refiner(self, refinerBool):
-        self.refinerBool = refinerBool
-
-
 

@@ -111,16 +111,19 @@ class StableDiffusionMenu(QWidget):
         self.layout = QVBoxLayout(self)
         self.opacity_effect = QGraphicsOpacityEffect()
         self.opacity_effect.setOpacity(0.5)  # Set the opacity here (0.0 to 1.0)
+        self.clear_effect = QGraphicsOpacityEffect()
+        self.clear_effect.setOpacity(0)
 
         self.tilingCheckBox = QCheckBox("Tiling")
+        self.tilingCheckBox.setChecked(True)
         
-        
-
         self.modelComboBox = QComboBox(self)
         self.modelComboBox.addItem("Stable Diffusion XL")
         self.modelComboBox.addItem("Stable Diffusion XL Lightning")
         self.modelLoadButton = QPushButton("Load Model", self)
         self.modelLoadButton.clicked.connect(self.loadModel)
+        self.modelLoadButton.setStyleSheet(buttonstyle)
+        
  
         # Dropdown menu for Scheduler
         self.schedulerComboBox = QComboBox(self)
@@ -165,7 +168,7 @@ class StableDiffusionMenu(QWidget):
         # Create QLineEdit and QLabel for Prompt1
         self.prompt1Label = QLabel("Prompt1")
         self.prompt1LineEdit = QLineEdit()
-        self.prompt1LineEdit.setText("texture, prompt,  top down close up, 135mm IMAX, UHD, 8k, f10, dslr, hdr")
+        self.prompt1LineEdit.setText("texture, prompt, top down close up, 135mm IMAX, UHD, 8k, f10, dslr, hdr")
         # Create QLineEdit and QLabel for Negative Prompt1
         self.negativePrompt1LineEdit = QLineEdit()
         self.negativePrompt1LineEdit.setText("unrealistic, shadows")
@@ -239,7 +242,6 @@ class StableDiffusionMenu(QWidget):
         self.modelLayout = QVBoxLayout()
         loadBox.setLayout(self.modelLayout)
         addFormRow(self.modelLayout,"Model", self.modelComboBox, self.modelLoadButton)
-        self.modelLayout.addWidget(self.tilingCheckBox)
         self.layout.addWidget(loadBox)
 
 
@@ -262,6 +264,7 @@ class StableDiffusionMenu(QWidget):
         self.runLayout.addLayout(self.heightLayout)
         self.runLayout.addWidget(self.widthLabel)
         self.runLayout.addLayout(self.widthLayout)
+        self.runLayout.addWidget(self.tilingCheckBox)
         addFormRow(self.runLayout,"Number of Images", self.batchSpinBox)
         self.runLayout.addWidget(self.generateButton)
         # output images
@@ -275,7 +278,7 @@ class StableDiffusionMenu(QWidget):
         self.runLayout.addLayout(self.imagesBottomLayout)
         self.layout.addWidget(self.runBox)
         self.runBox.setEnabled(False)
-        self.runBox.setGraphicsEffect(self.opacity_effect)
+        self.runBox.setGraphicsEffect(self. opacity_effect)
         self.layout.addStretch()
 
 
@@ -284,9 +287,15 @@ class StableDiffusionMenu(QWidget):
         self.settings = QSettings("Ashill", "SDtoUnreal")
         stored_list = self.settings.value("SchedulersList", [])
         if stored_list:
-                self.schedulerlist = tuple(stored_list)
-                for option in self.schedulerlist:
-                    self.schedulerComboBox.addItem(option)
+            self.schedulerlist = list(stored_list)
+            if "DPMSolverSDEScheduler" in self.schedulerlist:
+                self.schedulerlist.remove("DPMSolverSDEScheduler")
+            if "LMSDiscreteScheduler" in self.schedulerlist:
+                self.schedulerlist.remove("LMSDiscreteScheduler")
+            for option in self.schedulerlist:
+                self.schedulerComboBox.addItem(option)
+
+        
         self.schedulerComboBox.setCurrentText("EulerDiscreteScheduler")
 
 
@@ -318,18 +327,13 @@ class StableDiffusionMenu(QWidget):
 
     @Slot()
     def setScheduler(self, index):
-        self.SDXL.set_scheduler(self.schedulerComboBox.currentText())\
-        
-
+        self.SDXL.set_scheduler(self.schedulerComboBox.currentText())
 
     @Slot()
     def setRefiner(self, state):
         if state:
-            self.SDXL.set_refiner(True)
             self.denoisingFractionLabel.setText(".8")
             self.denoisingFractionSlider.setValue(80)
-        else:
-            self.SDXL.set_refiner(False)
 
     def setSettings(self):
         settings = {
@@ -342,7 +346,8 @@ class StableDiffusionMenu(QWidget):
             "width": self.widthSpinBox.value(),
             "seed": self.seedSpinBox.value(),
             "numImagesPerPrompt": self.batchSpinBox.value(),
-            "tiling": self.tilingCheckBox.isChecked()
+            "tiling": self.tilingCheckBox.isChecked(),
+            'refiner': self.refinerCheckBox.isChecked()
         }
         print(settings)
         
@@ -351,23 +356,29 @@ class StableDiffusionMenu(QWidget):
         if not self.runBox.isEnabled():
             self.runBox.setGraphicsEffect(None)
             self.runBox.setEnabled(True)
+
         loadSettingsDict = {
             "model": self.modelComboBox.currentText(),
-            "tiling": self.tilingCheckBox.isChecked()
         }
 
         if loadSettingsDict["model"] == "Stable Diffusion XL Lightning":
             self.inferenceStepsSpinBox.setValue(4)
             self.inferenceStepsSpinBox.setEnabled(False)
+            # self.inferenceStepsSpinBox.setGraphicsEffect(self.opacity_effect)
             self.guidanceScaleSpinBox.setValue(0)
             self.guidanceScaleSpinBox.setEnabled(False)
+            # self.guidanceScaleSpinBox.setGraphicsEffect(self.opacity_effect)
             self.refinerCheckBox.setChecked(False)
             self.refinerCheckBox.setEnabled(False)
+            # self.refinerCheckBox.setGraphicsEffect(self.opacity_effect)
+            
         else:
             self.inferenceStepsSpinBox.setEnabled(True)
             self.inferenceStepsSpinBox.setValue(30)
+            self.inferenceStepsSpinBox.setGraphicsEffect(self.clear_effect)
             self.guidanceScaleSpinBox.setValue(5)
             self.guidanceScaleSpinBox.setEnabled(True)
+            self.guidanceScaleSpinBox.setGraphicsEffect(self.clear_effect)
             self.refinerCheckBox.setEnabled(True)
         self.SDXL.load_models(loadSettingsDict)
         self.load_settings()
