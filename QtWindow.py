@@ -34,8 +34,8 @@ class MainWindow(QMainWindow):
         self.tabWidget.addTab(self.firstMenu, "Setup")
         self.tabWidget.addTab(self.secondMenu, "SDXL")
         # self.tabWidget.addTab(self.thirdMenu, "Adapters")
-        self.tabWidget.addTab(self.fourthMenu, "DeepBump")
-        self.tabWidget.addTab(self.fifthMenu, "Marigold")
+        self.tabWidget.addTab(self.fourthMenu, "Normal & Height")
+        self.tabWidget.addTab(self.fifthMenu, "Alternate Height")
         self.tabWidget.addTab(self.sixthMenu, "Pixel Range Conversion")
           
 
@@ -168,7 +168,7 @@ class StableDiffusionMenu(QWidget):
         # Create QLineEdit and QLabel for Prompt1
         self.prompt1Label = QLabel("Prompt1")
         self.prompt1LineEdit = QLineEdit()
-        self.prompt1LineEdit.setText("texture, prompt, top down close up, 135mm IMAX, UHD, 8k, f10, dslr, hdr")
+        self.prompt1LineEdit.setText("texture, prompt, top down close up, hyperrealism, high detail, 135mm IMAX, UHD, 8k, f10, dslr, hdr")
         # Create QLineEdit and QLabel for Negative Prompt1
         self.negativePrompt1LineEdit = QLineEdit()
         self.negativePrompt1LineEdit.setText("unrealistic, shadows")
@@ -375,10 +375,8 @@ class StableDiffusionMenu(QWidget):
         else:
             self.inferenceStepsSpinBox.setEnabled(True)
             self.inferenceStepsSpinBox.setValue(30)
-            self.inferenceStepsSpinBox.setGraphicsEffect(self.clear_effect)
             self.guidanceScaleSpinBox.setValue(5)
             self.guidanceScaleSpinBox.setEnabled(True)
-            self.guidanceScaleSpinBox.setGraphicsEffect(self.clear_effect)
             self.refinerCheckBox.setEnabled(True)
         self.SDXL.load_models(loadSettingsDict)
         self.load_settings()

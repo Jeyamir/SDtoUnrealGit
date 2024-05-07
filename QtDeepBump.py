@@ -6,6 +6,7 @@ from module_color_to_normals import apply as apply_normals
 from module_normals_to_height import apply as apply_height
 from PIL import Image
 import numpy as np
+from utils_image import display_image, numpy_to_PIL
 
 
 class ImageProcessor(QMainWindow):
@@ -66,37 +67,30 @@ class ImageProcessor(QMainWindow):
             file_path = file_dialog.selectedFiles()[0]
             image = self.load_image_as_numpy(file_path)
             self.numpy_img = image
-            self.display_image(image, self.image_label)
-
-    def display_image(self, image, imageLabel):
-        image = self.numpy_to_PIL(image)
-        pixmap = QPixmap.fromImage(ImageQt(image))
-        imageLabel.setMaximumWidth(400)
-        imageLabel.setPixmap(pixmap)
-        imageLabel.setMaximumHeight(400)
+            display_image(image, self.image_label)
 
     def generate_normal_map(self):
         if self.numpy_img is not None:
             self.numpy_normal = apply_normals(self.numpy_img, "SMALL", None)
-            self.display_image(self.numpy_normal, self.normal_label)
+            display_image(self.numpy_normal, self.normal_label)
 
     def generate_height_map(self):
         if self.numpy_normal is not None:
             self.numpy_height = apply_height(self.numpy_normal, "SMALL", None)
-            self.display_image(self.numpy_height, self.height_label)
+            display_image(self.numpy_height, self.height_label)
 
     def save_normal(self):
         if self.numpy_normal is not None:
             file_path, _ = QFileDialog.getSaveFileName(self, "Save Normal Map", ".", "Images (*.png *.jpg *.bmp)")
             if file_path:
-                output_image = self.numpy_to_PIL(self.numpy_normal)
+                output_image = numpy_to_PIL(self.numpy_normal)
                 output_image.save(file_path)
 
     def save_height(self):
         if self.numpy_height is not None:
             file_path, _ = QFileDialog.getSaveFileName(self, "Save Height Map", ".", "Images (*.png *.jpg *.bmp)")
             if file_path:
-                output_image = self.numpy_to_PIL(self.numpy_height)
+                output_image = numpy_to_PIL(self.numpy_height)
                 output_image.save(file_path)
     
     def load_image_as_numpy(self, image_path):
@@ -116,25 +110,25 @@ class ImageProcessor(QMainWindow):
             print(f"Error opening or reading image file {image_path}")
             return None
 
-    def numpy_to_PIL(self, numpy_image):
-        # Check if the numpy image is in the format C, H, W and if it is normalized between [0, 1]
-        if numpy_image.ndim == 3 and numpy_image.shape[0] in [1, 3, 4]:  # Assuming grayscale or RGB/RGBA
-            # Convert C, H, W to H, W, C
-            numpy_image = np.transpose(numpy_image, (1, 2, 0))
-        else:
-            raise ValueError("Input array must have shape (C, H, W) and C should be 1, 3, or 4")
+    # def RGBA_numpy_to_PIL(self, numpy_image):
+    #     # Check if the numpy image is in the format C, H, W and if it is normalized between [0, 1]
+    #     if numpy_image.ndim == 3 and numpy_image.shape[0] in [1, 3, 4]:  # Assuming grayscale or RGB/RGBA
+    #         # Convert C, H, W to H, W, C
+    #         numpy_image = np.transpose(numpy_image, (1, 2, 0))
+    #     else:
+    #         raise ValueError("Input array must have shape (C, H, W) and C should be 1, 3, or 4")
 
-        # Check if the image data is already in the expected range [0, 1] and type is float
-        if numpy_image.dtype != np.float32 and numpy_image.dtype != np.float64:
-            raise TypeError("Image data type should be float32 or float64 for normalization.")
+    #     # Check if the image data is already in the expected range [0, 1] and type is float
+    #     if numpy_image.dtype != np.float32 and numpy_image.dtype != np.float64:
+    #         raise TypeError("Image data type should be float32 or float64 for normalization.")
 
-        # Scale from [0, 1] to [0, 255]
-        numpy_image = (numpy_image * 255).clip(0, 255).astype(np.uint8)
+    #     # Scale from [0, 1] to [0, 255]
+    #     numpy_image = (numpy_image * 255).clip(0, 255).astype(np.uint8)
         
-        # Create and return the PIL Image
-        image_pil = Image.fromarray(numpy_image)
+    #     # Create and return the PIL Image
+    #     image_pil = Image.fromarray(numpy_image)
 
-        return image_pil
+    #     return image_pil
     
 if __name__ == "__main__":
     app = QApplication(sys.argv)

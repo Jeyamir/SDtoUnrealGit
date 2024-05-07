@@ -1,5 +1,5 @@
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 def adjust_contrast(image, min_color, max_color, contrast_factor):
         img_array = np.array(image)
@@ -37,24 +37,7 @@ def scale_pixel_range(image, input_min, input_max, output_min, output_max):
 
     return scaled_image
 
-def convert_pixel_range(self, image, input_min, input_max, output_min, output_max):
-        if self.input_min <= pixel_value <= self.input_max:
-            centered_pixel_value = pixel_value / 255 - center_point
-            adjusted_pixel_value = centered_pixel_value * contrast_factor + center_point
-            return int(adjusted_pixel_value * 255)
-        else:
-            return pixel_value`
-        
-def imgToCanny():
-      ...
-      
-def imgToSketch():
-      ...
-def imgToDepth():
-    ...
+def invert_image(image):
+     image = ImageOps.invert(image)
+     return image
 
-def imgToOpenPose():
-    ...
-
-def imgToLineart():
-    ...

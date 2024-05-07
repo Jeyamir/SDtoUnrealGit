@@ -1,8 +1,29 @@
+
+
+from PySide6.QtWidgets import QFileDialog
+from PySide6.QtGui import QImage
 import numpy as np
 import cv2
 from scipy.ndimage import convolve
 
-def calculate_weighted_occlusion(height_map, radius=5, local_weight=0.5, global_weight=0.5, invert=False):
+def load_image(file_path, is_uint16=False):
+    """Load an image from the file path."""
+    image = QImage(file_path)
+    if is_uint16:
+        # Convert from uint16 to uint8
+        image = QImage(image.constBits(), image.width(), image.height(), QImage.Format_Grayscale16)
+        image = image.convertToFormat(QImage.Format_Grayscale8)
+    return image
+
+
+
+def save_image(image, parent=None):
+    """Save an image using a file dialog."""
+    file_path, _ = QFileDialog.getSaveFileName(parent, "Save Image", ".", "Images (*.png *.jpg *.bmp)")
+    if file_path:
+        image.save(file_path)
+
+def calculate_occlusion(height_map, radius=5, local_weight=0.5, global_weight=0.5, invert=False):
     """Calculate ambient occlusion with weighted local and global comparisons."""
     # Calculate the global average height
     global_average = np.mean(height_map)
@@ -36,14 +57,3 @@ def calculate_weighted_occlusion(height_map, radius=5, local_weight=0.5, global_
 
     occlusion_map = occlusion_map.astype(np.uint8)
     return occlusion_map
-
-# Load a height map
-height_map_path = "C:\\Users\\tanmu\\Downloads\\Bark_Spruce_xkmicazn_4K_surface_ms\\xkmicazn_4K_Displacement.jpg"   # Update this path
-height_map = cv2.imread(height_map_path, cv2.IMREAD_GRAYSCALE)
-
-# Generate the occlusion map with specified weights
-occlusion_map = calculate_weighted_occlusion(height_map, radius=5, local_weight=.8, global_weight=.8, invert=True)
-
-# Save the occlusion map
-cv2.imwrite('weighted_ambient_occlusion_map.png', occlusion_map)
-

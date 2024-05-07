@@ -11,11 +11,6 @@ import re
 # from accelerate import Accelerator
 
 class SDXLPipeline:
-    def __init__(self):
-
-        
-        self.set_refiner(False)
-
 
     def load_models(self, loadSettings):
         
@@ -73,13 +68,29 @@ class SDXLPipeline:
                     self.conv_layers.append(module)
                     self.conv_layers_original_paddings.append(module.padding_mode)
     def generate_image(self, index):
-        # compel = Compel(
-        # tokenizer=[self.base.tokenizer, self.base.tokenizer_2] ,
-        # text_encoder=[self.base.text_encoder, self.base.text_encoder_2],
-        # returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
-        # requires_pooled=[False, True]
-        # )
-        # conditioning_embeds, pooled_embeds = compel(self.generateSettings["prompt"])
+        self.prompt = self.generateSettings["prompt"].strip()
+        
+        base_compel = Compel(
+        tokenizer=[self.base.tokenizer, self.base.tokenizer_2] ,
+        text_encoder=[self.base.text_encoder, self.base.text_encoder_2],
+        returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
+        requires_pooled=[False, True]
+        )
+        
+        conditioning_embeds, pooled_embeds = base_compel(self.generateSettings["prompt"])
+        negative_conditioning_embeds, negative_pooled_embeds = base_compel(self.generateSettings["negativePrompt"])
+        
+        if self.refiner is not None:
+            refiner_compel = Compel(
+            tokenizer=self.refiner.tokenizer_2,
+            text_encoder=self.refiner.text_encoder_2,
+            returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
+            requires_pooled=True,
+            )
+            refiner_conditioning_embeds, refiner_pooled_embeds = refiner_compel(self.generateSettings["prompt"])
+            refiner_negative_conditioning_embeds, refiner_negative_pooled_embeds = refiner_compel(self.generateSettings["negativePrompt"])
+
+
 
 
         for cl, opad in zip(self.conv_layers, self.conv_layers_original_paddings):
@@ -88,14 +99,16 @@ class SDXLPipeline:
             else:
                 cl.padding_mode = opad
 
-        self.prompt = self.generateSettings["prompt"].strip()
+
         generator = torch.Generator().manual_seed(self.generateSettings["seed"] + index)
-        if self.genereateSettings["refiner"] == True:
+        if self.generateSettings["refiner"] == True:
             image = self.base(
-                # prompt_embeds=conditioning_embeds,
-                # pooled_prompt_embeds=pooled_embeds,
-                prompt = self.prompt,
-                negative_prompt = self.generateSettings["negativePrompt"],
+                prompt_embeds=conditioning_embeds,
+                pooled_prompt_embeds=pooled_embeds,
+                # prompt = self.prompt,
+                # negative_prompt = self.generateSettings["negativePrompt"],
+                negative_prompt_embeds=negative_conditioning_embeds,
+                negative_pooled_prompt_embeds=negative_pooled_embeds,
                 num_inference_steps=self.generateSettings["numInferenceSteps"],
                 denoising_end=self.generateSettings["denoisingEnd"],
                 guidance_scale = self.generateSettings["CFG"],
@@ -105,10 +118,12 @@ class SDXLPipeline:
                 output_type="latent",
             ).images
             image = self.refiner(
-                # prompt_embeds=conditioning_embeds,
-                # pooled_prompt_embeds=pooled_embeds,
-                prompt = self.prompt,
-                negative_prompt = self.generateSettings["negativePrompt"],
+                prompt_embeds=refiner_conditioning_embeds,
+                pooled_prompt_embeds=refiner_pooled_embeds,
+                # prompt = self.prompt,
+                # negative_prompt = self.generateSettings["negativePrompt"],
+                negative_prompt_embeds=refiner_negative_conditioning_embeds,
+                negative_pooled_prompt_embeds=refiner_negative_pooled_embeds,
                 num_inference_steps= self.generateSettings["numInferenceSteps"],
                 denoising_start= self.generateSettings["denoisingEnd"],
                 guidance_scale = self.generateSettings["CFG"],
@@ -120,10 +135,12 @@ class SDXLPipeline:
             
         else:
             image = self.base(
-                # prompt_embeds=conditioning_embeds,
-                # pooled_prompt_embeds=pooled_embeds,
-                prompt = self.prompt,
-                negative_prompt = self.generateSettings["negativePrompt"],
+                prompt_embeds=conditioning_embeds,
+                pooled_prompt_embeds=pooled_embeds,
+                # prompt = self.prompt,
+                # negative_prompt = self.generateSettings["negativePrompt"],
+                negative_prompt_embeds=negative_conditioning_embeds,
+                negative_pooled_prompt_embeds=negative_pooled_embeds,
                 num_inference_steps=self.generateSettings["numInferenceSteps"],
                 guidance_scale = self.generateSettings["CFG"],
                 height =  self.generateSettings["height"],

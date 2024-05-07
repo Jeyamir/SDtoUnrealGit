@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QV
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PIL import Image, ImageQt, ImageOps
+from utils_Qt import upload_image, save_image
 
 import numpy as np
 import sys
@@ -136,14 +137,8 @@ class PixelRangeConversionApp(QMainWindow):
         self.image_label.setPixmap(QPixmap.fromImage(q_image))
 
     def upload_image(self):
-        file_dialog = QFileDialog(self)
-        file_dialog.setNameFilter("Images (*.png *.jpg *.bmp)")
-        file_dialog.setViewMode(QFileDialog.Detail)
-        file_dialog.setFileMode(QFileDialog.ExistingFile)
-
-        if file_dialog.exec():
-            file_path = file_dialog.selectedFiles()[0]
-            self.load_image(file_path)
+        file_path = upload_image(self)
+        self.load_image(file_path)
 
     def load_image(self, file_path):
         self.image = Image.open(file_path)
@@ -161,6 +156,12 @@ class PixelRangeConversionApp(QMainWindow):
             self.display_image(self.image)
 
     def save_image(self):
+        # This is a wrapper to use the save_image function with a parent reference
+        if self.converted_image:
+            save_image(self.converted_image, self)
+        else:
+            print("No image loaded to save.")
+
         if self.image:
             file_path, _ = QFileDialog.getSaveFileName(self, "Save Image", ".", "Images (*.png *.jpg *.bmp)")
             if file_path:
