@@ -1,49 +1,47 @@
-import numpy as np
-import cv2
-from scipy.ndimage import convolve
+import unreal
+from pathlib import Path
+import subprocess
+import threading
+import sys
+PYTHON_INTERPRETER_PATH = unreal.get_interpreter_executable_path()
+assert Path(PYTHON_INTERPRETER_PATH).exists(), f"Python not found at '{PYTHON_INTERPRETER_PATH}'"
+sitepackages = Path(PYTHON_INTERPRETER_PATH).parent / "Lib" / "site-packages"
+sys.path.append(str(sitepackages))
+import pkg_resources
 
-def calculate_weighted_occlusion(height_map, radius=5, local_weight=0.5, global_weight=0.5, invert=False):
-    """Calculate ambient occlusion with weighted local and global comparisons."""
-    # Calculate the global average height
-    global_average = np.mean(height_map)
-    
-    # Define a kernel for local neighborhood averaging
-    kernel_size = 2 * radius + 1
-    y, x = np.ogrid[-radius:radius+1, -radius:radius+1]
-    kernel = (x**2 + y**2 <= radius**2).astype(float)
-    kernel[kernel == 1] = 1 / kernel.sum()  # Normalize the kernel to sum to 1
 
-    # Convolve the height map with this kernel for local averages
-    local_averages = convolve(height_map.astype(float), kernel, mode='constant', cval=0)
+def check_installed_packages():
+    """Create a set of already installed packages."""
+    return {pkg.key for pkg in pkg_resources.working_set}
+
+def install_packages_from_requirements(requirements_file, target_directory):
+    """Install packages specified in the given requirements.txt file to a defined target directory."""
+    installed_packages = check_installed_packages()
+    with open(requirements_file, 'r') as file:
+        required_packages = [line.strip().split('==')[0] for line in file if line.strip() and not line.startswith('#')]
     
-    # Calculate occlusion by comparing local and global averages
-    local_occlusion = np.where(height_map < local_averages, local_averages - height_map, 0)
-    global_occlusion = np.where(height_map < global_average, global_average - height_map, 0)
-    
-    # Apply weights to each occlusion component
-    combined_occlusion = local_weight * local_occlusion + global_weight * global_occlusion
-    
-    # Normalize and scale the occlusion map
-    max_occlusion = np.max(combined_occlusion)
-    if max_occlusion > 0:
-        occlusion_map = 255 * (combined_occlusion / max_occlusion)
+    packages_to_install = [pkg for pkg in required_packages if pkg.lower() not in installed_packages]
+    if packages_to_install:
+        print(packages_to_install)
+        command = [PYTHON_INTERPRETER_PATH, '-m', 'pip', 'install', '--no-deps', '--target', str(target_directory)] + packages_to_install
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode == 0:
+            unreal.log("All packages installed successfully.")
+            unreal.log(result.stdout)
+        else:
+            unreal.log_warning(result.stderr)
+            unreal.log_warning("Failed to install packages.")
     else:
-        occlusion_map = np.zeros_like(combined_occlusion)
+        unreal.log("All required packages are already installed.")
 
-    # Invert the occlusion map
-    if invert:
-        occlusion_map = 255 - occlusion_map
+def pip_install_async(requirements_path, target_directory):
+    thread = threading.Thread(target=install_packages_from_requirements, args=(str(requirements_path), target_directory))
+    thread.start()
 
-    occlusion_map = occlusion_map.astype(np.uint8)
-    return occlusion_map
 
-# Load a height map
-height_map_path = "C:\\Users\\tanmu\\Downloads\\Bark_Spruce_xkmicazn_4K_surface_ms\\xkmicazn_4K_Displacement.jpg"   # Update this path
-height_map = cv2.imread(height_map_path, cv2.IMREAD_GRAYSCALE)
-
-# Generate the occlusion map with specified weights
-occlusion_map = calculate_weighted_occlusion(height_map, radius=5, local_weight=.8, global_weight=.8, invert=True)
-
-# Save the occlusion map
-cv2.imwrite('weighted_ambient_occlusion_map.png', occlusion_map)
-
+requirements_path = Path(__file__).parent / "requirements.txt"
+intermediate_path_str = unreal.Paths.project_intermediate_dir()
+target_directory = Path(intermediate_path_str) / "PipInstall" / "Lib" / "site-packages"
+unreal.EditorDialog.show_message("Module Install Notice", "Pip is installing the required packages for Stable Diffusion Window.\n This may take some time.", unreal.AppMsgType.OK)
+pip_install_async(requirements_path, target_directory)
+print(str(target_directory))

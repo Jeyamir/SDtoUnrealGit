@@ -13,10 +13,11 @@ import re
 class SDXLPipeline:
 
     def load_models(self, loadSettings):
-        
+        self.base = None
+        self.refiner = None
         targets = []
-        model_id = "stabilityai/stable-diffusion-xl-base-1.0"
-        refiner_id = "stabilityai/stable-diffusion-xl-refiner-1.0"
+        model_id = loadSettings['model']
+        refiner_id = loadSettings['refiner']
         if loadSettings['model'] == "Stable Diffusion XL Lightning":
             repo = "ByteDance/SDXL-Lightning"
             ckpt = "sdxl_lightning_4step_unet.safetensors"
@@ -33,7 +34,7 @@ class SDXLPipeline:
                 variant="fp16",
             )
             # .to("cuda")
-
+        if loadSettings['refiner'] is not None:
             self.refiner = DiffusionPipeline.from_pretrained(
                 refiner_id,
                 text_encoder_2=self.base.text_encoder_2,
@@ -52,6 +53,7 @@ class SDXLPipeline:
 
 
         self.base.enable_model_cpu_offload()
+        self.base.enable_xformers_memory_efficient_attention()
         self.save_settings()
 
         for item in self.base.components:
@@ -67,6 +69,7 @@ class SDXLPipeline:
                 if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.ConvTranspose2d):
                     self.conv_layers.append(module)
                     self.conv_layers_original_paddings.append(module.padding_mode)
+
     def generate_image(self, index):
         self.prompt = self.generateSettings["prompt"].strip()
         
@@ -89,9 +92,6 @@ class SDXLPipeline:
             )
             refiner_conditioning_embeds, refiner_pooled_embeds = refiner_compel(self.generateSettings["prompt"])
             refiner_negative_conditioning_embeds, refiner_negative_pooled_embeds = refiner_compel(self.generateSettings["negativePrompt"])
-
-
-
 
         for cl, opad in zip(self.conv_layers, self.conv_layers_original_paddings):
             if self.generateSettings["tiling"] == True:
@@ -150,6 +150,9 @@ class SDXLPipeline:
 
         file_path = f"./{self.prompt[:30]}_{index}.png".replace("\n", "")
         image.save(file_path)
+        print(f"Image saved to {file_path}")
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
         return file_path
     
 

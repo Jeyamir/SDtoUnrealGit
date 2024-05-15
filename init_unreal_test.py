@@ -11,12 +11,6 @@ parent_dir = file_path.parent
 sitepackages = os.path.join(parent_dir, "Lib")
 sitepackages = os.path.join(sitepackages, "site-packages")
 sys.path.append(sitepackages)
-intermediatePath = unreal.Paths.engine_intermediate_dir()
-intermediatePath = os.path.join(intermediatePath, "PipInstall").replace("\\","/")
-intermediatePath = os.path.join(intermediatePath, "Lib").replace("\\","/")
-intermediatePath = os.path.join(intermediatePath, "site-packages").replace("\\","/")
-sys.path.append(intermediatePath)
-print(intermediatePath)
 
 def append_path():
     if str(sitepackages) not in sys.path:
@@ -32,8 +26,7 @@ def pip_install(packages):
     proc = subprocess.Popen(
         [
             PYTHON_INTERPRETER_PATH, 
-            '-m', 'pip', 'install', 
-            '--no-warn-script-location', 
+            '-m', 'pip', 'install',  '--no-warn-script-location', "--no-cache-dir",
             *packages
         ],
         startupinfo = info,
@@ -85,52 +78,27 @@ def Menu():
     script_menu.add_menu_entry("Scripts",entry)
     # refresh the UI
     menus.refresh_all_widgets()
+
 # Put here your required python packages
+required = {'Pyside6', 'torch', 'diffusers', 'pillow', 'transformers', 'numpy', 'torchvision', 'torchaudio', 'opencv-python', 'compel', 'onnxruntime', 'accelerate'}
 
-def install_packages_from_requirements(requirements_file):
-    """Install packages specified in the given requirements.txt file."""
-    try:
-        # Construct the command to execute
-        command = [PYTHON_INTERPRETER_PATH, '-m', 'pip', 'install', '-r', requirements_file]
-            # dont show window
-        info = subprocess.STARTUPINFO()
-        info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
-        proc = subprocess.Popen(
-            command,
-            startupinfo = info,
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
-            encoding = "utf-8"
-        )
-
-        print("All packages installed successfully!")
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to install packages from {requirements_file}. Error: {e}")
 
 append_path()
-# # Path to your requirements.txt file
-# requirements_path = "D:\\Unreal Projects\\PythonPluginOne\\Plugins\\PythonPluginTest\\Content\\Python\\requirements.txt"
-
-# # Install packages
-# install_packages_from_requirements(requirements_path)
-
 Menu()
 
-def print_requirements(file_path):
-    """Print the contents of a requirements.txt file."""
-    try:
-        with open(file_path, 'r') as file:
-            contents = file.read()
-            print(contents)
-    except FileNotFoundError:
-        print("The file was not found.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+import threading
 
-# Example usage
-current_file_path = Path(__file__)
-current_file_dir = current_file_path.parent
-requirements_path = current_file_dir / "requirements.txt"
-print_requirements(requirements_path)
-print("Done!")
+def pip_install_async(packages):
+    def install():
+        # your existing pip_install function code here
+        # remember to remove or modify any Unreal logging functions if they are not thread-safe
+        pip_install(packages)
+    
+    # Start the installation in a new thread
+    thread = threading.Thread(target=install)
+    thread.start()
+
+# Use pip_install_async instead of pip_instal
+unreal.EditorDialog.show_message("Module Install Notice", "Pip is installing the required packages for Stable Diffusion Window.\n This may take some time.", unreal.AppMsgType.OK)
+pip_install_async(required)
+print(required)

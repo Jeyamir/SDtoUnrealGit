@@ -1,13 +1,15 @@
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget, QFileDialog
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget, QFileDialog, QLayout
 from PIL import Image
 def addFormRow(layout, labelText, widget, optionalWidget=None, enabled=True):
         rowLayout = QHBoxLayout()
-        rowLayout.addWidget(QLabel(labelText))
+        label = QLabel(labelText)
+        rowLayout.addWidget(label)
         rowLayout.addWidget(widget)
         if optionalWidget:
             widget.setEnabled(enabled)
             rowLayout.addWidget(optionalWidget)
         layout.addLayout(rowLayout)
+        return rowLayout
 
 def upload_image(parent=None):
     """
@@ -36,3 +38,22 @@ def save_image(image, parent=None):
         file_path, _ = QFileDialog.getSaveFileName(parent, "Save Image", ".", "Images (*.png *.jpg *.bmp)")
         if file_path:
             image.save(file_path)
+
+
+def hide_widgets_in_layout(layout):
+    """Recursively hide all widgets in a given layout."""
+    for i in range(layout.count()):
+        item = layout.itemAt(i)
+        if item.widget():  # Check if the item is a widget
+            item.widget().hide()
+        elif item.layout():  # Check if the item is a sub-layout
+            hide_widgets_in_layout(item.layout()) 
+
+def show_widgets_in_layout(layout):
+    """Recursively hide all widgets in a given layout."""
+    for i in range(layout.count()):
+        item = layout.itemAt(i)
+        if item.widget():  # Check if the item is a widget
+            item.widget().show()
+        elif item.layout():  # Check if the item is a sub-layout
+            hide_widgets_in_layout(item.layout()) 

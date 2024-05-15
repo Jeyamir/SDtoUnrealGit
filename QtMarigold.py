@@ -39,7 +39,9 @@ class MarigoldWindow(QMainWindow):
 
         self.match_input_resolution_checkbox = QCheckBox("Match Input Resolution", self)
         self.match_input_resolution_checkbox.setGeometry(50, 450, 200, 30)
-        self.match_input_resolution_checkbox.isChecked(True)
+        self.match_input_resolution_checkbox.setChecked(True)
+
+
 
         self.denoising_steps_spinbox = QSpinBox(self)
         self.denoising_steps_spinbox.setGeometry(250, 450, 100, 30)

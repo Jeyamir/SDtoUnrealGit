@@ -1,27 +1,50 @@
-import cv2
-import numpy as np
+import unreal
+import subprocess
+from pathlib import Path
+import os
+import sys 
 
-def calculate_normal_map(height_map_filename):
-    # Load the height map as a grayscale image
-    height_map = cv2.imread(height_map_filename, cv2.IMREAD_GRAYSCALE)
-    
-    # Compute gradients in the x and y directions
-    sobel_x = cv2.Sobel(height_map, cv2.CV_64F, 1, 0, ksize=3)
-    sobel_y = cv2.Sobel(height_map, cv2.CV_64F, 0, 1, ksize=3)
-    
-    # Calculate the z component of the normal (assuming depth is 1 for all normals)
-    z = np.ones_like(sobel_x)
-    
-    # Normalize the gradients to create normal vectors
-    normal_map = np.dstack((sobel_x, sobel_y, z))
-    norms = np.linalg.norm(normal_map, axis=2)
-    normal_map_normalized = normal_map / norms[:,:,None]
-    
-    # Map components from [-1, 1] to [0, 255]
-    normal_map_normalized = ((normal_map_normalized + 1) / 2 * 255).astype(np.uint8)
-    
-    return normal_map_normalized
+PYTHON_INTERPRETER_PATH = unreal.get_interpreter_executable_path()
+assert Path(PYTHON_INTERPRETER_PATH).exists(), f"Python not found at '{PYTHON_INTERPRETER_PATH}'"
+sitepackages = Path(PYTHON_INTERPRETER_PATH).parent / "Lib" / "site-packages"
+sys.path.append(str(sitepackages))
+import pkg_resources
+import threading
 
-# Usage example:
-normal_map = calculate_normal_map("D:\\Projects\\SDtoUnreal\\flat rock wall depth_map.png")
-cv2.imwrite('normal_map_output.png', normal_map)  # Save the image instead of showing it
+def check_installed_packages():
+    """Create a set of already installed packages."""
+    return {pkg.key for pkg in pkg_resources.working_set}
+
+def install_packages_from_requirements(requirements_file):
+    """Install packages specified in the given requirements.txt file only if not already installed."""
+    installed_packages = check_installed_packages()
+    with open(requirements_file, 'r') as file:
+        required_packages = [line.strip().split('==')[0] for line in file if line.strip() and not line.startswith('#')]
+    
+    packages_to_install = [pkg for pkg in required_packages if pkg.lower() not in installed_packages]
+    if packages_to_install:
+        command = [PYTHON_INTERPRETER_PATH, '-m', 'pip', 'install', '--no-deps'] + packages_to_install
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode == 0:
+            unreal.log("All packages installed successfully.")
+            unreal.log(result.stdout)
+        else:
+            unreal.log_warning(result.stderr)
+            unreal.log_warning("Failed to install packages.")
+    else:
+        unreal.log("All required packages are already installed.")
+
+
+def pip_install_async(requirements_path):
+    thread = threading.Thread(target=install_packages_from_requirements, args=(str(requirements_path),))
+    thread.start()
+
+requirements_path = Path(__file__).parent / "requirements.txt"
+print(requirements_path)
+
+# Use pip_install_async instead of pip_instal
+unreal.EditorDialog.show_message("Module Install Notice", "Pip is installing the required packages for Stable Diffusion Window.\n This may take some time.", unreal.AppMsgType.OK)
+# install_packages_from_requirements(requirements_path)
+pip_install_async(requirements_path)
+# pip_install(missing)
+print(PYTHON_INTERPRETER_PATH)

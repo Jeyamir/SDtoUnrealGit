@@ -1,22 +1,35 @@
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget, QGroupBox, QPushButton, QLineEdit, QVBoxLayout,QHBoxLayout, QWidget, QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget, QFileDialog, QComboBox, QSpinBox, QSlider, QCheckBox, QDoubleSpinBox
-from PySide6.QtGui import QPixmap, QFont
+from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget, QGroupBox, QPushButton, QTextEdit, QLineEdit, QVBoxLayout,QHBoxLayout, QWidget, QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget, QFileDialog, QComboBox, QSpinBox, QSlider, QCheckBox, QDoubleSpinBox
+from PySide6.QtGui import QPixmap, QFont, QScreen
 from PySide6.QtCore import QSettings, Qt, Slot, QThread
 from random import randint
 from PipelineSDXL import SDXLPipeline
 # from QtAdapters import AdapterWindow
 from QtDeepBump import ImageProcessor
-from utils_Qt import addFormRow
+from utils_Qt import addFormRow, hide_widgets_in_layout, show_widgets_in_layout
 from QtThread import WorkerThread
 from QtMarigold import MarigoldWindow
 from convertimagerange import PixelRangeConversionApp
 from QtThread import WorkerThread
+from pathlib import Path
+import os
+# import unreal
+import threading
+
+app = None
 
 class MainWindow(QMainWindow):
     def __init__(self, model = None):
         super().__init__()
-        self.resize(500, 500)
         self.setWindowTitle("Stable Diffusion Material Generator for Unreal")
+        screen = QApplication.primaryScreen()
+
+        if screen is not None:
+            # Get the screen's geometry
+            screen_geometry = screen.geometry()
+            max_height = screen_geometry.height()
+            # Set maximum height of the window
+            self.setMaximumHeight(max_height/2)
 
 
         # QT Window Tab Widget
@@ -37,7 +50,14 @@ class MainWindow(QMainWindow):
         self.tabWidget.addTab(self.fourthMenu, "Normal & Height")
         self.tabWidget.addTab(self.fifthMenu, "Alternate Height")
         self.tabWidget.addTab(self.sixthMenu, "Pixel Range Conversion")
-          
+        
+    def closeEvent(self, event):
+        # This method is called when the window is closed
+        global app
+        if app is not None:
+            # app.shutdown()
+            print("App closed")
+
 
 class SetupMenu(QWidget):
     def __init__(self):
@@ -120,11 +140,17 @@ class StableDiffusionMenu(QWidget):
         self.modelComboBox = QComboBox(self)
         self.modelComboBox.addItem("Stable Diffusion XL")
         self.modelComboBox.addItem("Stable Diffusion XL Lightning")
+        self.modelComboBox.addItem("Custom Model...")
+        self.modelComboBox.currentIndexChanged.connect(self.modelComboBoxChanged)
         self.modelLoadButton = QPushButton("Load Model", self)
         self.modelLoadButton.clicked.connect(self.loadModel)
         self.modelLoadButton.setStyleSheet(buttonstyle)
         
- 
+        self.modelLineEdit = QLineEdit()
+        self.modelLineEdit.setPlaceholderText("Model ID from huggingface.co i.e. /stabilityai/stable-diffusion-xl-base-1.0")
+        self.refinerLineEdit = QLineEdit()
+        self.refinerLineEdit.setPlaceholderText("Model ID from huggingface.co i.e. /stabilityai/stable-diffusion-xl-refiner")
+        
         # Dropdown menu for Scheduler
         self.schedulerComboBox = QComboBox(self)
         self.schedulerComboBox.currentIndexChanged.connect(self.setScheduler)
@@ -164,13 +190,13 @@ class StableDiffusionMenu(QWidget):
         self.seedCheckBox = QCheckBox()
         self.seedCheckBox.stateChanged.connect(self.seedSpinBox.setEnabled)
 
+        loadWarningLabel = QLabel("First time loading a model may take a while. Please be patient.")
 
         # Create QLineEdit and QLabel for Prompt1
         self.prompt1Label = QLabel("Prompt1")
-        self.prompt1LineEdit = QLineEdit()
+        self.prompt1LineEdit = QTextEdit()
         self.prompt1LineEdit.setText("texture, prompt, top down close up, hyperrealism, high detail, 135mm IMAX, UHD, 8k, f10, dslr, hdr")
-        # Create QLineEdit and QLabel for Negative Prompt1
-        self.negativePrompt1LineEdit = QLineEdit()
+        self.negativePrompt1LineEdit = QTextEdit()
         self.negativePrompt1LineEdit.setText("unrealistic, shadows")
 
 
@@ -242,7 +268,12 @@ class StableDiffusionMenu(QWidget):
         self.modelLayout = QVBoxLayout()
         loadBox.setLayout(self.modelLayout)
         addFormRow(self.modelLayout,"Model", self.modelComboBox, self.modelLoadButton)
+        self.modelInputRow = addFormRow(self.modelLayout, "Base Model", self.modelLineEdit)
+        self.refinerInputRow = addFormRow(self.modelLayout, "Refiner Model", self.refinerLineEdit)
+        self.modelLayout.addWidget(loadWarningLabel)
         self.layout.addWidget(loadBox)
+        hide_widgets_in_layout(self.modelInputRow)
+        hide_widgets_in_layout(self.refinerInputRow)
 
 
         self.runBox = QGroupBox("Run Model")
@@ -254,11 +285,11 @@ class StableDiffusionMenu(QWidget):
 
 
         addFormRow(self.runLayout, "Scheduler", self.schedulerComboBox)
-        addFormRow(self.runLayout,"Inference Steps", self.inferenceStepsSpinBox)
+        self.inferenceStepsRow = addFormRow(self.runLayout,"Inference Steps", self.inferenceStepsSpinBox)
         self.runLayout.addWidget(self.refinerCheckBox)
-        addFormRow(self.runLayout,"Refiner Starts at", self.denoisingFractionSlider)
+        self.refinerRow = addFormRow(self.runLayout,"Refiner Starts at", self.denoisingFractionSlider)
         self.runLayout.addWidget(self.denoisingFractionLabel)
-        addFormRow(self.runLayout,"Guidance Scale (CFG)", self.guidanceScaleSpinBox)
+        self.guidanceScaleRow = addFormRow(self.runLayout,"Guidance Scale (CFG)", self.guidanceScaleSpinBox)
         addFormRow(self.runLayout,"Custom Seed", self.seedSpinBox, self.seedCheckBox, False)
         self.runLayout.addWidget(self.heightLabel)
         self.runLayout.addLayout(self.heightLayout)
@@ -337,8 +368,8 @@ class StableDiffusionMenu(QWidget):
 
     def setSettings(self):
         settings = {
-            "prompt": self.prompt1LineEdit.text(),
-            "negativePrompt": self.negativePrompt1LineEdit.text(),
+            "prompt": self.prompt1LineEdit.toPlainText(),
+            "negativePrompt": self.negativePrompt1LineEdit.toPlainText(),
             "numInferenceSteps": self.inferenceStepsSpinBox.value(),
             "denoisingEnd": self.denoisingFractionSlider.value()/100.0,
             "CFG": self.guidanceScaleSpinBox.value(),
@@ -359,25 +390,54 @@ class StableDiffusionMenu(QWidget):
 
         loadSettingsDict = {
             "model": self.modelComboBox.currentText(),
+            "refiner": self.refinerLineEdit.text(),
         }
 
         if loadSettingsDict["model"] == "Stable Diffusion XL Lightning":
             self.inferenceStepsSpinBox.setValue(4)
             self.inferenceStepsSpinBox.setEnabled(False)
-            # self.inferenceStepsSpinBox.setGraphicsEffect(self.opacity_effect)
+            hide_widgets_in_layout(self.inferenceStepsRow)
             self.guidanceScaleSpinBox.setValue(0)
             self.guidanceScaleSpinBox.setEnabled(False)
-            # self.guidanceScaleSpinBox.setGraphicsEffect(self.opacity_effect)
+            hide_widgets_in_layout(self.guidanceScaleRow)
             self.refinerCheckBox.setChecked(False)
             self.refinerCheckBox.setEnabled(False)
-            # self.refinerCheckBox.setGraphicsEffect(self.opacity_effect)
-            
+            self.refinerCheckBox.hide()
+            hide_widgets_in_layout(self.refinerRow)
+            self.denoisingFractionLabel.hide()
         else:
             self.inferenceStepsSpinBox.setEnabled(True)
             self.inferenceStepsSpinBox.setValue(30)
+            show_widgets_in_layout(self.inferenceStepsRow)
             self.guidanceScaleSpinBox.setValue(5)
             self.guidanceScaleSpinBox.setEnabled(True)
+            show_widgets_in_layout(self.guidanceScaleRow)
             self.refinerCheckBox.setEnabled(True)
+            self.refinerCheckBox.show()
+            show_widgets_in_layout(self.refinerRow)
+            self.denoisingFractionLabel.show()
+        if self.modelComboBox.currentText() == "Stable Diffusion XL":
+            loadSettingsDict["model"] = "stabilityai/stable-diffusion-xl-base-1.0"
+            loadSettingsDict["refiner"] = "stabilityai/stable-diffusion-xl-refiner-1.0"
+        elif self.modelComboBox.currentText() == "Stable Diffusion XL Lightning":
+            loadSettingsDict["model"] = "stabilityai/stable-diffusion-xl-base-1.0"
+            loadSettingsDict["refiner"] = None
+        elif self.modelComboBox.currentText() == "Custom Model...":
+            loadSettingsDict["model"] = self.modelLineEdit.text()
+            loadSettingsDict["refiner"] = self.refinerLineEdit.text()
+            if self.refinerLineEdit.text().strip() == "":
+                loadSettingsDict["refiner"] = None
+                self.refinerCheckBox.setChecked(False)
+                self.refinerCheckBox.hide()
+                hide_widgets_in_layout(self.refinerRow)
+                self.denoisingFractionLabel.hide()
+            else:
+                self.refinerCheckBox.setChecked(True)
+                self.refinerCheckBox.show()
+                show_widgets_in_layout(self.refinerRow)
+                self.denoisingFractionLabel.show()
+        
+
         self.SDXL.load_models(loadSettingsDict)
         self.load_settings()
         self.SDXL.set_scheduler("EulerDiscreteScheduler")
@@ -385,15 +445,26 @@ class StableDiffusionMenu(QWidget):
 
     def updateSeed(self, seed):
         self.seedSpinBox.setValue(seed)
+    def modelComboBoxChanged(self, index):
+        if self.modelComboBox.currentText() == "Custom Model...":
+            show_widgets_in_layout(self.modelInputRow)
+            show_widgets_in_layout(self.refinerInputRow)
+        else:
+            hide_widgets_in_layout(self.modelInputRow)
+            hide_widgets_in_layout(self.refinerInputRow)
 
 
 
-def run_gui_app(image_path=None):
-    app = QApplication(sys.argv)
+def run_gui_app():
+    global app
+    # Check if QApplication already exists
+    if app is not None:
+        app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
 
 
 if __name__ == "__main__":
-    run_gui_app()
+    threading.Thread(target=run_gui_app).start()
+    # run_gui_app()
