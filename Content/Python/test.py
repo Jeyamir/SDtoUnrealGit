@@ -1,16 +1,18 @@
 import subprocess
 
-def generate_requirements():
-    # Define the path to the virtual environment's pip executable
-    
-    # Define the output file for the requirements
-    output_file = 'requiresd.txt'
+def generate_required_txt():
+    # Run 'pip freeze' command and capture the output
+    result = subprocess.run(['pip', 'freeze'], capture_output=True, text=True)
 
-    # Execute pip freeze and write the output to the file
-    with open(output_file, 'w') as f:
-        subprocess.run(['pip', 'freeze', '>', 'requiresd.txt'], stdout=f)
+    # Check if the command was successful
+    if result.returncode == 0:
+        # Write the output to required.txt
+        with open('required.txt', 'w') as file:
+            file.write(result.stdout)
+        print("required.txt has been created successfully.")
+    else:
+        # If an error occurred, print the error
+        print("Failed to generate required.txt:", result.stderr)
 
-    print(f'Requirements file generated at {output_file}')
-
-if __name__ == "__main__":
-    generate_requirements()
+# Call the function
+generate_required_txt()

@@ -1,5 +1,9 @@
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget, QFileDialog, QLayout
 from PIL import Image
+from PySide6.QtCore import Signal, Qt
+from PySide6.QtGui import QPixmap, QImage
+from PIL.ImageQt import ImageQt
+
 def addFormRow(layout, labelText, widget, optionalWidget=None, enabled=True):
         rowLayout = QHBoxLayout()
         label = QLabel(labelText)
@@ -27,7 +31,7 @@ def upload_image(parent=None):
         return file_path
     return None
 
-def save_image(image, parent=None):
+def save_image(image, filepath, parent=None):
     """
     Opens a file dialog to save an image. 
     :param image: QImage or similar image object that has a save method.
@@ -35,7 +39,7 @@ def save_image(image, parent=None):
     :return: None
     """
     if image:
-        file_path, _ = QFileDialog.getSaveFileName(parent, "Save Image", ".", "Images (*.png *.jpg *.bmp)")
+        file_path, _ = QFileDialog.getSaveFileName(parent, "Save Image", filepath, "Images (*.png *.jpg *.bmp)")
         if file_path:
             image.save(file_path)
 
@@ -57,3 +61,36 @@ def show_widgets_in_layout(layout):
             item.widget().show()
         elif item.layout():  # Check if the item is a sub-layout
             hide_widgets_in_layout(item.layout()) 
+
+            from PySide6.QtWidgets import QLabel
+
+class ClickableLabel(QLabel):
+    clicked = Signal()  # Define a custom signal
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.default_stylesheet = """
+            QLabel {
+                border: 3px solid white;
+            }
+        """
+        self.hover_stylesheet = """
+            QLabel {
+                border: 5px solid #007bff;;
+            }
+        """
+        self.setStyleSheet(self.default_stylesheet)
+        self.setAlignment(Qt.AlignCenter)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()  # Emit the custom signal
+        super().mousePressEvent(event)
+
+    def enterEvent(self, event):
+        self.setStyleSheet(self.hover_stylesheet)  # Change the color when hovered
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setStyleSheet(self.default_stylesheet)  # Reset to the default color when the mouse leaves
+        super().leaveEvent(event)

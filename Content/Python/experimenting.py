@@ -1,117 +1,70 @@
-import sys
+import unreal
+import subprocess
+from pathlib import Path
+import os
+import sys 
+
+PYTHON_INTERPRETER_PATH = unreal.get_interpreter_executable_path()
+assert Path(PYTHON_INTERPRETER_PATH).exists(), f"Python not found at '{PYTHON_INTERPRETER_PATH}'"
+file_path = Path(PYTHON_INTERPRETER_PATH)
+parent_dir = file_path.parent
+sitepackages = os.path.join(parent_dir, "Lib")
+sitepackages = os.path.join(sitepackages, "site-packages")
+sys.path.append(sitepackages)
+
+def append_path():
+    if str(sitepackages) not in sys.path:
+        sys.path.append(str(sitepackages))
+    sys.path = [p for p in sys.path if p is not None]
+    
+import pkg_resources
+def install_packages_from_requirements(requirements_file):
+    """Install packages specified in the given requirements.txt file."""
+    try:
+        # Construct the command to execute
+        command = [PYTHON_INTERPRETER_PATH, '-m', 'pip', 'install', '-r', requirements_file, '--no-warn-script-location', "--no-cache-dir"]
+        # command = [PYTHON_INTERPRETER_PATH, '-m', 'pip', 'debug', '-vvv']
+        # Execute the command
+        result = subprocess.run(command, capture_output=True, text=True)
+
+        # Check if the installation was successful
+        if result.returncode == 0:
+            print("All packages installed successfully.")
+            print(result.stdout)
+        else:
+            print(result.stderr)
+            print("Failed to install packages.")
+        unreal.log(result.stdout)
+        unreal.log_warning(result.stderr)
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install packages from {requirements_file}. Error: {e}")
+
+
+# Path to your requirements.txt file
+current_file_path = Path(__file__)
+current_file_dir = current_file_path.parent
+requirements_path = current_file_dir / "requirements.txt"
+print(requirements_path)
+# Install packages
+
+# append_path()
+
 import threading
-from PySide6.QtWidgets import QApplication, QMainWindow
-from PySide6.QtCore import QObject, Signal, Slot, QCoreApplication
 
-class MainWindow(QMainWindow):
-    windowClosed = Signal()
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("My App")
-        self.setGeometry(100, 100, 600, 400)
-
-    def closeEvent(self, event):
-        self.windowClosed.emit()
-        print("Closing window...")
-        super().closeEvent(event)
-
-class AppThread(QObject):
-    closed = Signal()
-
-    def __init__(self):
-        super().__init__()
-        self.thread = None
-
-    def run(self):
-        print("Running application...")
-
-        self.app = QApplication.instance()
-        if self.app is None:
-            self.app = QApplication(sys.argv)
-        self.window = MainWindow()
-        self.window.windowClosed.connect(self.cleanup)
-        self.window.show()
-        self.app.exec()
-
-    @Slot()
-    def cleanup(self):
-        print("Cleaning up application...")
-        # self.closed.emit()
-        # QCoreApplication.quit()
-
-    def start(self):
-        self.thread = threading.Thread(target=self.run)
-        self.thread.start()
-        print("Starting thread...")
-
-    def stop(self):
-        if self.thread and self.thread.is_alive():
-            self.thread.join()
-            print("Stopping thread...")
-
-def run_gui_app():
-    global app_thread
-    app_thread = AppThread()
-    app_thread.closed.connect(start_new_gui_thread)
-    app_thread.start()
-    print("Running GUI application...")
-
-def start_new_gui_thread():
-    global app_thread
-    if app_thread:
-        app_thread.stop()
-    run_gui_app()
-    print("Starting new GUI thread...")
-
-if __name__ == "__main__":
-    app_thread = None
-    start_new_gui_thread()
+def pip_install_async(packages):
+    def install():
+        # your existing pip_install function code here
+        # remember to remove or modify any Unreal logging functions if they are not thread-safe
+        install_packages_from_requirements(packages)
+    
+    # Start the installation in a new thread
+    thread = threading.Thread(target=install)
+    thread.start()
 
 
-
-# from PySide6.QtCore import Slot, Signal
-# from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QDialog
-
-# class ChildWnd(QDialog):
-#     closed = Signal()
-#     def __int__(self):
-#         QDialog.__init__(self)
-
-#     @Slot()
-#     def closeEvent(self, event):
-#         self.closed.emit()
-#         super().closeEvent(event)
-
-# class MainWnd(QMainWindow):
-#     def __init__(self):
-#         QMainWindow.__init__(self)
-#         self.centralwidget = QWidget()
-#         self.layout = QVBoxLayout()
-#         self.button = QPushButton("Show window")
-#         self.button.pressed.connect(self.on_button)
-#         self.layout.addWidget(self.button)
-#         self.label = QLabel()
-#         self.layout.addWidget(self.label)
-#         self.centralwidget.setLayout(self.layout)
-#         self.setCentralWidget(self.centralwidget)
-#         self.child_wnd = None
-
-#     @Slot()
-#     def on_button(self):
-#         self.child_wnd = ChildWnd(self)
-#         self.child_wnd.closed.connect(self.on_child_closed)
-#         self.label.setText("")
-#         self.child_wnd.show()
-
-#     @Slot()
-#     def on_child_closed(self):
-#         self.label.setText("Window closed")
-
-# def main():
-#     app = QApplication()
-#     mainwindow = MainWnd()
-#     mainwindow.show()
-#     app.exec()
-
-# if __name__ == '__main__':
-#     main()
+# Use pip_install_async instead of pip_instal
+unreal.EditorDialog.show_message("Module Install Notice", "Pip is installing the required packages for Stable Diffusion Window.\n This may take some time.", unreal.AppMsgType.OK)
+# install_packages_from_requirements(requirements_path)
+pip_install_async(requirements_path)
+# pip_install(missing)
+print(PYTHON_INTERPRETER_PATH)

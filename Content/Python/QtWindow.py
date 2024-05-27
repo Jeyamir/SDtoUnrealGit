@@ -1,54 +1,56 @@
 import sys
-from PySide6.QtWidgets import QApplication, QMessageBox, QMainWindow, QTabWidget, QGroupBox, QPushButton, QTextEdit, QLineEdit, QVBoxLayout,QHBoxLayout, QWidget, QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget, QFileDialog, QComboBox, QSpinBox, QSlider, QCheckBox, QDoubleSpinBox
+import json
+from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QScrollArea, QTabWidget, QGroupBox, QPushButton, QTextEdit, QLineEdit, QVBoxLayout,QHBoxLayout, QWidget, QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget, QFileDialog, QComboBox, QSpinBox, QSlider, QCheckBox, QDoubleSpinBox
 from PySide6.QtGui import QPixmap, QFont, QScreen
 from PySide6.QtCore import QSettings, Qt, Slot, QThread
 from random import randint
 from PipelineSDXL import SDXLPipeline
 # from QtAdapters import AdapterWindow
-from QtDeepBump import ImageProcessor
-from utils_Qt import addFormRow, hide_widgets_in_layout, show_widgets_in_layout
+from QtDeepBump import DeepBump
+from utils_Qt import addFormRow, hide_widgets_in_layout, show_widgets_in_layout, ClickableLabel, save_image
 from QtThread import WorkerThread
 from QtMarigold import MarigoldWindow
 from convertimagerange import PixelRangeConversionApp
 from QtThread import WorkerThread
+from PIL.ImageQt import ImageQt
 from pathlib import Path
 import os
-# import unreal
+import unreal
 import threading
-
+    
 
 class MainWindow(QMainWindow):
     def __init__(self, model = None):
         super().__init__()
         self.setWindowTitle("Stable Diffusion Material Generator for Unreal")
-        screen = QApplication.primaryScreen()
 
-        if screen is not None:
-            # Get the screen's geometry
-            screen_geometry = screen.geometry()
-            max_height = screen_geometry.height()
-            # Set maximum height of the window
-            self.setMaximumHeight(max_height/2)
-
+        self.filepath = unreal.Paths.project_content_dir()
 
         # QT Window Tab Widget
         self.tabWidget = QTabWidget(self)
         self.setCentralWidget(self.tabWidget)
         # Create instances of the menus
         self.firstMenu = SetupMenu()
-        self.secondMenu = StableDiffusionMenu()
+        self.firstMenu.register_observer(self)
+        self.secondMenu = StableDiffusionMenu(self.filepath )
         # self.thirdMenu = AdapterWindow()
-        self.fourthMenu = ImageProcessor()
-        self.fifthMenu = MarigoldWindow()
+        self.fourthMenu = DeepBump(self.filepath )
+        self.fifthMenu = MarigoldWindow(self.filepath )
         self.sixthMenu = PixelRangeConversionApp()
 
         # Add tab names
         self.tabWidget.addTab(self.firstMenu, "Setup")
         self.tabWidget.addTab(self.secondMenu, "SDXL")
         # self.tabWidget.addTab(self.thirdMenu, "Adapters")
-        self.tabWidget.addTab(self.fourthMenu, "Normal & Height")
+        self.tabWidget.addTab(self.fourthMenu, "DeepBump")
         self.tabWidget.addTab(self.fifthMenu, "Alternate Height")
         self.tabWidget.addTab(self.sixthMenu, "Pixel Range Conversion")
+          
+    def notify(self):
+        self.secondMenu.filePath = self.firstMenu.Esavelocationlabel.text()
+        self.fourthMenu.filePath = self.firstMenu.Esavelocationlabel.text()
+        self.fifthMenu.filePath = self.firstMenu.Esavelocationlabel.text()
+
     def closeEvent(self, event):
         reply = QMessageBox.question(self, 'Message', 'Are you sure you want to quit?',
                                                QMessageBox.Yes | QMessageBox.No, 
@@ -58,12 +60,12 @@ class MainWindow(QMainWindow):
             QApplication.quit()
         else:
             event.ignore()
-    
 
 
 class SetupMenu(QWidget):
     def __init__(self):
         super().__init__()
+        self.observers = []
         buttonstyle = """
         QPushButton {
             background-color: #007bff;
@@ -78,11 +80,11 @@ class SetupMenu(QWidget):
     """
         # Central widget and layout
         layout = QVBoxLayout(self)
-        #save location info label
+        # save location info label
         self.savelocationlabel = QLabel("Save Location")
-        #save location explicit label
+        # save location explicit label
         self.Esavelocationlabel = QLabel("/")
-        #save location button
+        # save location button
         self.savelocationbutton = QPushButton("Select Save Location")
         self.savelocationbutton.clicked.connect(self.select_file)
         self.savelocationbutton.setStyleSheet(buttonstyle)
@@ -95,26 +97,68 @@ class SetupMenu(QWidget):
 
     def load_settings(self):
         self.settings = QSettings("Ashill", "SDtoUnreal")
-        last_used_file = self.settings.value("savelocation", "")
-        if isinstance(last_used_file, str):
-            self.Esavelocationlabel.setText(last_used_file)
+        saved_locations_json = self.settings.value("savedLocations", "[]")
+        saved_locations = json.loads(saved_locations_json)
+        allowed_directory = unreal.Paths.project_content_dir()
+        # unreal.Paths.project_content_dir()
+        valid_location = None
+
+        for location in saved_locations:
+            if self.is_within_allowed_directory(location, allowed_directory):
+                valid_location = location
+                break
+
+        if valid_location:
+            self.Esavelocationlabel.setText(valid_location)
+        else:
+            self.Esavelocationlabel.setText(allowed_directory)
 
     def save_settings(self, file_path):
-        self.settings.setValue("lastUsedFile", file_path)
+        allowed_directory = unreal.Paths.project_content_dir()
+        # unreal.Paths.project_content_dir()
+        saved_locations_json = self.settings.value("savedLocations", "[]")
+        saved_locations = json.loads(saved_locations_json)
+
+        # Remove existing valid directory if it exists
+        saved_locations = [loc for loc in saved_locations if not self.is_within_allowed_directory(loc, allowed_directory)]
+
+        # Append the new valid directory
+        saved_locations.append(file_path)
+        self.settings.setValue("savedLocations", json.dumps(saved_locations))
 
     @Slot()
     def select_file(self):
+        allowed_directory = unreal.Paths.project_content_dir()
+        # unreal.Paths.project_content_dir()  # Get allowed directory from Unreal
         options = QFileDialog.Options()
-        folderName = QFileDialog.getExistingDirectory(self, "Select Folder", options=options)
-        if folderName:
+        folderName = QFileDialog.getExistingDirectory(self, "Select Folder", allowed_directory, options=options)
+        if folderName and self.is_within_allowed_directory(folderName, allowed_directory):
             self.save_settings(folderName)
             self.Esavelocationlabel.setText(folderName)
+            self.notify_observers()
+        else:
+            QMessageBox.warning(self, "Invalid Selection", f"Please select a folder within {allowed_directory}.")
 
+    def is_within_allowed_directory(self, selected_path, allowed_directory):
+        selected_path = os.path.abspath(selected_path)
+        allowed_directory = os.path.abspath(allowed_directory)
+            # Check if both paths are on the same drive
+        if os.path.splitdrive(selected_path)[0] != os.path.splitdrive(allowed_directory)[0]:
+            return False
+        return os.path.commonpath([selected_path, allowed_directory]) == allowed_directory
+    
+    def register_observer(self, observer):
+        self.observers.append(observer)
+
+    def notify_observers(self):
+        for observer in self.observers:
+            observer.notify()
 
 
 class StableDiffusionMenu(QWidget):
-    def __init__(self):
+    def __init__(self, filepath):
         super().__init__()
+        self.filePath = filepath
         buttonstyle = """
         QPushButton {
             background-color: #007bff;
@@ -127,8 +171,8 @@ class StableDiffusionMenu(QWidget):
             background-color: #0056b3;
         }
     """        
-        self.SDXL = SDXLPipeline()
-
+        self.SDXL = SDXLPipeline(unreal.Paths.project_content_dir())
+        # unreal.Paths.project_content_dir()
         # Central widget and layout
         self.layout = QVBoxLayout(self)
         self.opacity_effect = QGraphicsOpacityEffect()
@@ -209,14 +253,16 @@ class StableDiffusionMenu(QWidget):
         self.heightSlider.setMinimum(768) 
         self.heightSlider.setMaximum(2048)  
         self.heightSlider.setValue(1024)    
+        self.heightSlider.setSingleStep(16)
         # Create the height Spin Box
         self.heightSpinBox = QSpinBox()
         self.heightSpinBox.setMinimumWidth(100)
         self.heightSpinBox.setMinimum(768)
         self.heightSpinBox.setMaximum(2048)
         self.heightSpinBox.setValue(1024)  
+        self.heightSpinBox.setSingleStep(16)
         self.heightSlider.valueChanged.connect(self.heightSpinBox.setValue)
-        self.heightSpinBox.valueChanged.connect(self.heightSlider.setValue)
+        self.heightSlider.valueChanged.connect(self.check_height)
         self.heightLayout = QHBoxLayout()
         self.heightLayout.addWidget(self.heightSlider)
         self.heightLayout.addWidget(self.heightSpinBox)
@@ -229,15 +275,16 @@ class StableDiffusionMenu(QWidget):
         self.widthSlider.setMinimum(768) 
         self.widthSlider.setMaximum(2048)  
         self.widthSlider.setValue(1024)    
+        self.widthSlider.setSingleStep(16)
         # Create the width Spin Box
         self.widthSpinBox = QSpinBox()
         self.widthSpinBox.setMinimumWidth(100)
         self.widthSpinBox.setMinimum(768)
         self.widthSpinBox.setMaximum(2048)
-        self.widthSpinBox.stepBy(16)
-        self.widthSpinBox.setValue(1024)  
+        self.widthSpinBox.setValue(1024) 
+        self.widthSpinBox.setSingleStep(16)
         self.widthSlider.valueChanged.connect(self.widthSpinBox.setValue)
-        self.widthSpinBox.valueChanged.connect(self.widthSlider.setValue)
+        self.widthSpinBox.valueChanged.connect(self.check_width)
         self.widthLayout = QHBoxLayout()
         self.widthLayout.addWidget(self.widthSlider)
         self.widthLayout.addWidget(self.widthSpinBox)
@@ -261,11 +308,14 @@ class StableDiffusionMenu(QWidget):
         self.refinerCheckBox.stateChanged.connect(self.denoisingFractionSlider.setEnabled)
 
         # Labels for displaying the image
-        self.imageLabels = [QLabel(self) for _ in range(4)]
-        for label in self.imageLabels:
+        self.imageLabels = [ClickableLabel(self) for _ in range(4)]
+        self.images = [None] * 4
+        for i, label in enumerate(self.imageLabels):
             label.setFixedSize(200, 200)
+            label.clicked.connect(self.create_label_clicked_handler(i))
 
         # FORMATTING----------------------------------------------------------------------------------------------------------------
+
         loadBox = QGroupBox("Load Model")
         self.modelLayout = QVBoxLayout()
         loadBox.setLayout(self.modelLayout)
@@ -277,6 +327,9 @@ class StableDiffusionMenu(QWidget):
         hide_widgets_in_layout(self.modelInputRow)
         hide_widgets_in_layout(self.refinerInputRow)
 
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
 
         self.runBox = QGroupBox("Run Model")
         self.runLayout = QVBoxLayout()
@@ -309,12 +362,16 @@ class StableDiffusionMenu(QWidget):
         self.imagesBottomLayout.addWidget(self.imageLabels[3])
         self.runLayout.addLayout(self.imagesTopLayout)
         self.runLayout.addLayout(self.imagesBottomLayout)
-        self.layout.addWidget(self.runBox)
+
+        scroll_area.setWidget(self.runBox)
+        self.layout.addWidget(scroll_area, stretch = 1)
         self.runBox.setEnabled(False)
         self.runBox.setGraphicsEffect(self. opacity_effect)
         self.layout.addStretch()
 
-
+    def create_label_clicked_handler(self, index):
+        return lambda: self.label_clicked(index)
+    
     def load_settings(self):
         # Read the setting as a list/convert to tuple
         self.settings = QSettings("Ashill", "SDtoUnreal")
@@ -345,7 +402,7 @@ class StableDiffusionMenu(QWidget):
         self.worker.finished.connect(self.worker.deleteLater)
         self.worker.finished.connect(lambda: self.generateButton.setEnabled(True))
         self.worker.finished.connect(lambda: self.generateButton.setText("Generate"))
-        self.worker.returnpath.connect(self.handle_result)
+        self.worker.returnimage.connect(self.handle_result)
 
         # Step 6: Start the thread
         self.worker.start()
@@ -353,10 +410,17 @@ class StableDiffusionMenu(QWidget):
         # Disable button while task is running
         self.generateButton.setEnabled(False)
 
-    def handle_result(self, path, i):
-            self.imageLabels[i%4].setPixmap(QPixmap(path))
-            self.imageLabels[i%4].setScaledContents(True)
-            self.imageLabels[i%4].setAlignment(Qt.AlignCenter)
+    def handle_result(self, image, i):
+        self.images[i] = image
+        qimage = ImageQt(image)  # Convert PIL image to QImage
+        pixmap = QPixmap.fromImage(qimage)  # Convert QImage to QPixmap
+        self.imageLabels[i % 4].setPixmap(pixmap)
+        self.imageLabels[i % 4].setScaledContents(True)
+        self.imageLabels[i % 4].setAlignment(Qt.AlignCenter)
+    
+    def label_clicked(self, index):
+        if self.images[index] is not None:
+            save_image(self.images[index], self.filePath, self)
 
     @Slot()
     def setScheduler(self, index):
@@ -454,7 +518,14 @@ class StableDiffusionMenu(QWidget):
         else:
             hide_widgets_in_layout(self.modelInputRow)
             hide_widgets_in_layout(self.refinerInputRow)
-
+    def check_width(self):
+        if self.widthSpinBox.value() % 16 != 0:
+            self.widthSpinBox.setValue(self.widthSpinBox.value() - (self.widthSpinBox.value() % 16))
+            self.widthSlider.setValue(self.widthSpinBox.value())
+    def check_height(self):
+        if self.heightSpinBox.value() % 16 != 0:
+            self.heightSpinBox.setValue(self.heightSpinBox.value() - self.heightSpinBox.value() % 16)
+            self.heightSlider.setValue(self.heightSpinBox.value())
 
 
 def run_gui_app():
@@ -471,5 +542,5 @@ def run_gui_app():
 
 
 if __name__ == "__main__":
-    threading.Thread(target=run_gui_app).start()
-    # run_gui_app()
+    # threading.Thread(target=run_gui_app).start()
+    run_gui_app()

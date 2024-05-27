@@ -11,10 +11,11 @@ import torch
 
 
 class MarigoldWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, filepath):
         super().__init__()
+        self.filePath = filepath
 
-        self.setWindowTitle("Diffusion Pipeline Controller")
+        self.setWindowTitle("Marigold")
         self.setGeometry(100, 100, 800, 600)
         layout = QVBoxLayout()
 
@@ -134,10 +135,10 @@ class MarigoldWindow(QMainWindow):
         display_image(self.normalMap, self.normal_image_label)
 
     def save_normal(self):
-        save_image(numpy_to_PIL(self.depthImage), self)
+        save_image(numpy_to_PIL(self.depthImage), self.filePath, self)
 
     def save_height(self): 
-        save_image(numpy_to_PIL(self.normalMap), self)   
+        save_image(numpy_to_PIL(self.normalMap), self.filePath, self)   
     
 if __name__ == "__main__":
     app = QApplication(sys.argv)

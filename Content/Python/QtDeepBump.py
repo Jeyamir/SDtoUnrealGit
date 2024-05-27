@@ -2,6 +2,7 @@ import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QWidget, QFileDialog, QHBoxLayout
 from PySide6.QtGui import QPixmap, QFont
 from PIL.ImageQt import ImageQt
+from utils_Qt import save_image
 from module_color_to_normals import apply as apply_normals
 from module_normals_to_height import apply as apply_height
 from PIL import Image
@@ -9,12 +10,13 @@ import numpy as np
 from utils_image import display_image, numpy_to_PIL
 
 
-class ImageProcessor(QMainWindow):
-    def __init__(self):
+class DeepBump(QMainWindow):
+    def __init__(self, filepath):
         super().__init__()
-
-        self.setWindowTitle("Image Processor")
+        self.filePath = filepath
+        self.setWindowTitle("DeepBump")
         self.setGeometry(100, 100, 400, 200)
+        self.setMaximumHeight(500)
 
         self.image_label = QLabel(self)
         self.image_label.setScaledContents(True)
@@ -51,6 +53,7 @@ class ImageProcessor(QMainWindow):
         layout.addWidget(self.generate_height_button)
         layout.addWidget(self.save_normal_button)
         layout.addWidget(self.save_height_button)
+        layout.addStretch()
 
         container = QWidget()
         container.setLayout(layout)
@@ -62,7 +65,7 @@ class ImageProcessor(QMainWindow):
         file_dialog = QFileDialog(self)
         file_dialog.setNameFilter("Images (*.png *.jpg *.bmp)")
         file_dialog.setViewMode(QFileDialog.List)
-        file_dialog.setDirectory('.')
+        file_dialog.setDirectory(self.filePath)
         if file_dialog.exec_():
             file_path = file_dialog.selectedFiles()[0]
             image = self.load_image_as_numpy(file_path)
@@ -80,18 +83,10 @@ class ImageProcessor(QMainWindow):
             display_image(self.numpy_height, self.height_label)
 
     def save_normal(self):
-        if self.numpy_normal is not None:
-            file_path, _ = QFileDialog.getSaveFileName(self, "Save Normal Map", ".", "Images (*.png *.jpg *.bmp)")
-            if file_path:
-                output_image = numpy_to_PIL(self.numpy_normal)
-                output_image.save(file_path)
+        save_image(self.numpy_normal, self.filePath, self)
 
     def save_height(self):
-        if self.numpy_height is not None:
-            file_path, _ = QFileDialog.getSaveFileName(self, "Save Height Map", ".", "Images (*.png *.jpg *.bmp)")
-            if file_path:
-                output_image = numpy_to_PIL(self.numpy_height)
-                output_image.save(file_path)
+        save_image(self.numpy_height, self.filePath, self)
     
     def load_image_as_numpy(self, image_path):
         try:
@@ -110,28 +105,8 @@ class ImageProcessor(QMainWindow):
             print(f"Error opening or reading image file {image_path}")
             return None
 
-    # def RGBA_numpy_to_PIL(self, numpy_image):
-    #     # Check if the numpy image is in the format C, H, W and if it is normalized between [0, 1]
-    #     if numpy_image.ndim == 3 and numpy_image.shape[0] in [1, 3, 4]:  # Assuming grayscale or RGB/RGBA
-    #         # Convert C, H, W to H, W, C
-    #         numpy_image = np.transpose(numpy_image, (1, 2, 0))
-    #     else:
-    #         raise ValueError("Input array must have shape (C, H, W) and C should be 1, 3, or 4")
-
-    #     # Check if the image data is already in the expected range [0, 1] and type is float
-    #     if numpy_image.dtype != np.float32 and numpy_image.dtype != np.float64:
-    #         raise TypeError("Image data type should be float32 or float64 for normalization.")
-
-    #     # Scale from [0, 1] to [0, 255]
-    #     numpy_image = (numpy_image * 255).clip(0, 255).astype(np.uint8)
-        
-    #     # Create and return the PIL Image
-    #     image_pil = Image.fromarray(numpy_image)
-
-    #     return image_pil
-    
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = ImageProcessor()
+    window = DeepBump()
     window.show()
     sys.exit(app.exec())

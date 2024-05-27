@@ -11,6 +11,8 @@ import re
 # from accelerate import Accelerator
 
 class SDXLPipeline:
+    def __init__(self, filepath):
+        self.filePath = filepath
 
     def load_models(self, loadSettings):
         self.base = None
@@ -148,55 +150,36 @@ class SDXLPipeline:
                 generator = generator,
             ).images[0]
 
-        file_path = f"./{self.prompt[:30]}_{index}.png".replace("\n", "")
-        image.save(file_path)
-        print(f"Image saved to {file_path}")
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
-        return file_path
+        return image
     
 
-    # load all the schedulers
+    # Then, create a dictionary to map scheduler names to their classes
+    SCHEDULER_CLASSES = {
+        "DDIMScheduler": DDIMScheduler,
+        "KDPM2DiscreteScheduler": KDPM2DiscreteScheduler,
+        "PNDMScheduler": PNDMScheduler,
+        "EulerAncestralDiscreteScheduler": EulerAncestralDiscreteScheduler,
+        "DDPMScheduler": DDPMScheduler,
+        "DEISMultistepScheduler": DEISMultistepScheduler,
+        "DPMSolverMultistepScheduler": DPMSolverMultistepScheduler,
+        "KDPM2AncestralDiscreteScheduler": KDPM2AncestralDiscreteScheduler,
+        "EDMEulerScheduler": EDMEulerScheduler,
+        "HeunDiscreteScheduler": HeunDiscreteScheduler,
+        "EulerDiscreteScheduler": EulerDiscreteScheduler,
+        "UniPCMultistepScheduler": UniPCMultistepScheduler,
+        "DPMSolverSinglestepScheduler": DPMSolverSinglestepScheduler
+    }
+
     def set_scheduler(self, scheduler_str):
-        if(scheduler_str == "DDIMScheduler"):
-            self.base.scheduler = DDIMScheduler.from_config(self.base.scheduler.config)
-            print("Scheduler set to DDIMScheduler")
-        elif(scheduler_str == "KDPM2DiscreteScheduler"):
-            self.base.scheduler = KDPM2DiscreteScheduler.from_config(self.base.scheduler.config)
-            print("Scheduler set to KDPM2DiscreteScheduler")
-        elif(scheduler_str == "PNDMScheduler"):
-            self.base.scheduler = PNDMScheduler.from_config(self.base.scheduler.config)
-            print("Scheduler set to PNDMScheduler")
-        elif(scheduler_str == "EulerAncestralDiscreteScheduler"):
-            self.base.scheduler = EulerAncestralDiscreteScheduler.from_config(self.base.scheduler.config)
-            print("Scheduler set to EulerAncestralDiscreteScheduler")
-        elif(scheduler_str == "DDPMScheduler"):
-            print("Scheduler set to DDPMScheduler")
-            self.base.scheduler = DDPMScheduler.from_config(self.base.scheduler.config)
-        elif(scheduler_str == "DEISMultistepScheduler"):
-            print("Scheduler set to DEISMultistepScheduler")
-            self.base.scheduler = DEISMultistepScheduler.from_config(self.base.scheduler.config)
-        elif(scheduler_str == "DPMSolverMultistepScheduler"):
-            print("Scheduler set to DPMSolverMultistepScheduler")
-            self.base.scheduler = DPMSolverMultistepScheduler.from_config(self.base.scheduler.config)
-        elif(scheduler_str == "KDPM2AncestralDiscreteScheduler"):
-            print("Scheduler set to KDPM2AncestralDiscreteScheduler")
-            self.base.scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.base.scheduler.config)
-        elif(scheduler_str == "EDMEulerScheduler"):
-            print("Scheduler set to EDMEulerScheduler")
-            self.base.scheduler = EDMEulerScheduler.from_config(self.base.scheduler.config, timestep_spacing="trailing")
-        elif(scheduler_str == "HeunDiscreteScheduler"):
-            print("Scheduler set to HeunDiscreteScheduler")
-            self.base.scheduler = HeunDiscreteScheduler.from_config(self.base.scheduler.config)
-        elif(scheduler_str == "EulerDiscreteScheduler"):
-            print("Scheduler set to EulerDiscreteScheduler")
-            self.base.scheduler = EulerDiscreteScheduler.from_config(self.base.scheduler.config,  timestep_spacing="trailing")
-        elif(scheduler_str == "UniPCMultistepScheduler"):
-            print("Scheduler set to UniPCMultistepScheduler")
-            self.base.scheduler = UniPCMultistepScheduler.from_config(self.base.scheduler.config)
-        elif(scheduler_str == "DPMSolverSinglestepScheduler"):
-            print("Scheduler set to DPMSolverSinglestepScheduler")
-            self.base.scheduler = DPMSolverSinglestepScheduler.from_config(self.base.scheduler.config)
+        if scheduler_str in self.SCHEDULER_CLASSES:
+            SchedulerClass = self.SCHEDULER_CLASSES.get(scheduler_str)
+        if SchedulerClass:
+            self.base.scheduler = SchedulerClass.from_config(self.base.scheduler.config, timestep_spacing="trailing")
+            print(f"Scheduler set to {scheduler_str}")
+        else:
+            print(f"Scheduler {scheduler_str} not found")
 
     # saving qsettings for the UI
     def save_settings(self):

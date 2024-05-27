@@ -11,12 +11,6 @@ parent_dir = file_path.parent
 sitepackages = os.path.join(parent_dir, "Lib")
 sitepackages = os.path.join(sitepackages, "site-packages")
 sys.path.append(sitepackages)
-intermediatePath = unreal.Paths.engine_intermediate_dir()
-intermediatePath = os.path.join(intermediatePath, "PipInstall").replace("\\","/")
-intermediatePath = os.path.join(intermediatePath, "Lib").replace("\\","/")
-intermediatePath = os.path.join(intermediatePath, "site-packages").replace("\\","/")
-sys.path.append(intermediatePath)
-print(intermediatePath)
 
 def append_path():
     if str(sitepackages) not in sys.path:
@@ -117,20 +111,17 @@ append_path()
 
 Menu()
 
-def print_requirements(file_path):
-    """Print the contents of a requirements.txt file."""
-    try:
-        with open(file_path, 'r') as file:
-            contents = file.read()
-            print(contents)
-    except FileNotFoundError:
-        print("The file was not found.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+# def print_requirements(file_path):
+#     """Print the contents of a requirements.txt file."""
+#     try:
+#         with open(file_path, 'r') as file:
+#             contents = file.read()
+#             print(contents)
+#     except FileNotFoundError:
+#         print("The file was not found.")
+#     except Exception as e:
+#         print(f"An error occurred: {e}")
 
-# Example usage
-current_file_path = Path(__file__)
-current_file_dir = current_file_path.parent
-requirements_path = current_file_dir / "requirements.txt"
-print_requirements(requirements_path)
-print("Done!")
+# # Example usage
+# requirements_path = "D:\\Unreal Projects\\PythonPluginOne\\Plugins\\PythonPluginTest\\Content\\Python\\requirements.txt"  # This can be a relative or absolute path
+# print_requirements(requirements_path)
