@@ -83,10 +83,12 @@ class DeepBump(QMainWindow):
             display_image(self.numpy_height, self.height_label)
 
     def save_normal(self):
-        save_image(self.numpy_normal, self.filePath, self)
+        normal = numpy_to_PIL(self.numpy_normal)
+        save_image(normal, self.filePath, self)
 
     def save_height(self):
-        save_image(self.numpy_height, self.filePath, self)
+        height = numpy_to_PIL(self.numpy_height)
+        save_image(height, self.filePath, self)
     
     def load_image_as_numpy(self, image_path):
         try:
@@ -107,6 +109,6 @@ class DeepBump(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = DeepBump()
+    window = DeepBump("./")
     window.show()
     sys.exit(app.exec())

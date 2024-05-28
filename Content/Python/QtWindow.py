@@ -25,7 +25,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Stable Diffusion Material Generator for Unreal")
 
         self.filepath = unreal.Paths.project_content_dir()
-
         # QT Window Tab Widget
         self.tabWidget = QTabWidget(self)
         self.setCentralWidget(self.tabWidget)
@@ -171,6 +170,9 @@ class StableDiffusionMenu(QWidget):
             background-color: #0056b3;
         }
     """        
+        # self.assettools = unreal.AssetToolsHelpers.get_asset_tools()
+        # self.assetImportData = unreal.AutomatedAssetImportData()
+        # self.assetImportData.destination_path = self.filePath
         self.SDXL = SDXLPipeline(unreal.Paths.project_content_dir())
         # unreal.Paths.project_content_dir()
         # Central widget and layout
@@ -420,7 +422,13 @@ class StableDiffusionMenu(QWidget):
     
     def label_clicked(self, index):
         if self.images[index] is not None:
-            save_image(self.images[index], self.filePath, self)
+            filepath = save_image(self.images[index], self.filePath, self)
+            if filepath:
+                self.assetImportData.filenames = {filepath}
+                # print("filepath = ", filepath)
+                # self.assettools.import_assets_automated(self.assetImportData)
+
+
 
     @Slot()
     def setScheduler(self, index):

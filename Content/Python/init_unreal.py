@@ -2,7 +2,8 @@ import unreal
 import subprocess
 from pathlib import Path
 import os
-import sys 
+import sys
+from installPackages import install, run_accelerate_config
 
 PYTHON_INTERPRETER_PATH = unreal.get_interpreter_executable_path()
 assert Path(PYTHON_INTERPRETER_PATH).exists(), f"Python not found at '{PYTHON_INTERPRETER_PATH}'"
@@ -103,25 +104,5 @@ def install_packages_from_requirements(requirements_file):
         print(f"Failed to install packages from {requirements_file}. Error: {e}")
 
 append_path()
-# # Path to your requirements.txt file
-# requirements_path = "D:\\Unreal Projects\\PythonPluginOne\\Plugins\\PythonPluginTest\\Content\\Python\\requirements.txt"
-
-# # Install packages
-# install_packages_from_requirements(requirements_path)
-
 Menu()
-
-# def print_requirements(file_path):
-#     """Print the contents of a requirements.txt file."""
-#     try:
-#         with open(file_path, 'r') as file:
-#             contents = file.read()
-#             print(contents)
-#     except FileNotFoundError:
-#         print("The file was not found.")
-#     except Exception as e:
-#         print(f"An error occurred: {e}")
-
-# # Example usage
-# requirements_path = "D:\\Unreal Projects\\PythonPluginOne\\Plugins\\PythonPluginTest\\Content\\Python\\requirements.txt"  # This can be a relative or absolute path
-# print_requirements(requirements_path)
+install()

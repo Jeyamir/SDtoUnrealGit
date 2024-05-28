@@ -42,6 +42,7 @@ def save_image(image, filepath, parent=None):
         file_path, _ = QFileDialog.getSaveFileName(parent, "Save Image", filepath, "Images (*.png *.jpg *.bmp)")
         if file_path:
             image.save(file_path)
+            return file_path
 
 
 def hide_widgets_in_layout(layout):
@@ -62,7 +63,6 @@ def show_widgets_in_layout(layout):
         elif item.layout():  # Check if the item is a sub-layout
             hide_widgets_in_layout(item.layout()) 
 
-            from PySide6.QtWidgets import QLabel
 
 class ClickableLabel(QLabel):
     clicked = Signal()  # Define a custom signal
